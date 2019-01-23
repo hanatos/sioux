@@ -1100,12 +1100,12 @@ int sx_vid_handle_input()
       case SDL_JOYBUTTONDOWN:
       switch(event.jbutton.button)
       {
-        // case 3:
-        //   sx_heli_control_tail(sx.world.player_move, 1);
-        //   break;
-        // case 4:
-        //   sx_heli_control_tail(sx.world.player_move, -1);
-        //   break;
+        case 3:
+          sx_heli_control_tail(sx.world.player_move, -1);
+          break;
+        case 4:
+          sx_heli_control_tail(sx.world.player_move, 1);
+          break;
       }
       break;
       case SDL_JOYBUTTONUP:
