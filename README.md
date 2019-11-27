@@ -65,8 +65,7 @@ them are animated or even correctly located at ground level
 close to the behaviour of the original. that said even the
 original is pretty arcade.
 
-* game state doesn't change midi file playing and need to set the correct
-  c3_condition_midi_t
+* midi file playing doesn't reflect gamestate condition yet
 
 # TODO items
 
