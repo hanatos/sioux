@@ -1,4 +1,4 @@
-CC=clang
+CC=gcc
 CFLAGS=-Wall -std=c11 -D_DEFAULT_SOURCE
 # CFLAGS=-march=native -O3
 CFLAGS+=-O0 -g -ggdb3

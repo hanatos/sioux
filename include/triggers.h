@@ -18,6 +18,29 @@
 // setai
 // route
 
+typedef enum c3_condition_midi_t
+{
+  C3_COND_DIRE = 0,
+  C3_COND_FLIGHT,
+  C3_COND_WIN,
+  C3_COND_LOSE,
+  C3_COND_COMBAT,
+  C3_COND_PAD,
+  C3_COND_SCARY,
+}
+c3_condition_midi_t;
+
+static const char *c3_condition_midi_text[] =
+{
+  "dire.mid\0",
+  "flight.mid\0",
+  "win.mid\0",
+  "lose.mid\0",
+  "combat.mid\0",
+  "pad.mid\0",
+  "scary.mid\0",
+};
+
 typedef enum c3_condition_t
 {
   C3_COND_NEARER = 0, // nearer, <distance>, <object/waypoint>
@@ -124,3 +147,5 @@ int c3_triggers_check_cond(c3_mission_t *mis, c3_condition_t c, uint32_t arg0, u
 void c3_triggers_check_one(c3_mission_t *mis, c3_trigger_t *t);
 
 void c3_triggers_check(c3_mission_t *mis);
+
+char* c3_triggers_parse_music(char* filename, char letter, int gamestate, char fg);

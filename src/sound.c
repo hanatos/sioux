@@ -10,20 +10,27 @@ sx_sound_init(
     const char *filename)
 {
   memset(s, 0, sizeof(*s));
+
   s->wav_spec = sx.audio_spec;
-	SDL_AudioSpec *ret = SDL_LoadWAV(filename, &s->wav_spec, &s->wav_buf, &s->wav_len);
-  if(ret == 0)
+	s->chunk = Mix_LoadWAV(filename);
+  if(s->chunk == 0)
   {
     char fn[1024];
     snprintf(fn, sizeof(fn), "res/%s", filename);
-    ret = SDL_LoadWAV(fn, &s->wav_spec, &s->wav_buf, &s->wav_len);
+    s->chunk = Mix_LoadWAV(fn);
   }
-  if(ret == 0)
+
+  int channels;
+  Mix_QuerySpec(&sx.audio_spec.freq, &sx.audio_spec.format, &channels);
+  sx.audio_spec.channels = channels;
+
+  if(s->chunk == 0)
   {
     fprintf(stderr, "[sound] failed to open sound file %s!\n", filename);
-    fprintf(stderr, "[sound] reason: %s\n", SDL_GetError());
+    fprintf(stderr, "[sound] reason: %s\n", Mix_GetError());
     return 1;
   }
+
   strcpy(s->filename, filename);
   return 0;
 }
@@ -32,8 +39,7 @@ void
 sx_sound_cleaunp(
     sx_sound_t *s)
 {
-  // do this after CloseAudioDevice(id)
-	SDL_FreeWAV(s->wav_buf);
+	Mix_FreeChunk(s->chunk);
 }
 
 int
@@ -41,6 +47,7 @@ sx_sound_play(
     sx_sound_t *s)
 {
   fprintf(stderr, "[sound] playing %s\n", s->filename);
-	return SDL_QueueAudio(sx.audio_dev, s->wav_buf, s->wav_len);
+  Mix_PlayChannel(-1, s->chunk, 0);
+  return 0;
 }
 

@@ -586,7 +586,7 @@ uint32_t sx_vid_init_image(const char *filename)
   int width, height, bpp;
   uint8_t *buf;
   int err = png_read(fn, &width, &height, (void**)&buf, &bpp);
-  if(err) 
+  if(err)
   {
     fprintf(stderr, "[vid] failed to open `%s'\n", filename);
     return -1;

@@ -2,13 +2,14 @@
 
 #include <stdint.h>
 #include <SDL.h>
-
+#include <SDL_mixer.h>
 typedef struct sx_sound_t
 {
   char filename[256];
   SDL_AudioSpec wav_spec;
-	uint32_t      wav_len;
-	uint8_t      *wav_buf;
+  uint32_t      wav_len;
+  uint8_t      *wav_buf;
+  Mix_Chunk *chunk;
 }
 sx_sound_t;
 

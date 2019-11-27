@@ -30,7 +30,6 @@ int main(int argc, char *argv[])
   while(1)
   {
     sx_vid_render_frame();
-
     if(sx_vid_handle_input()) break;
     // TODO:
     // sx_ai_think();

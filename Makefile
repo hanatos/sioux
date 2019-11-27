@@ -1,4 +1,4 @@
-CC=clang
+CC=gcc
 CFLAGS=-Wall -std=c11
 CFLAGS+=-Iinclude -I.
 CFLAGS+=-g -ggdb3
@@ -7,7 +7,7 @@ LDFLAGS=-lm
 LDFLAGS+=$(shell pkg-config --libs libpng)
 CFLAGS+=$(shell pkg-config --cflags libpng)
 
-SDL_L+=-lSDL2 $(shell pkg-config --libs glew)
+SDL_L+=-lSDL2 -lSDL2_mixer $(shell pkg-config --libs glew)
 SDL_C+=-I/usr/include/SDL2 $(shell pkg-config --cflags glew)
 
 all: pcx model anim sx
@@ -30,6 +30,7 @@ HEADERS=include/assets.h\
         include/pcxread.h\
         include/pngio.h\
         include/sound.h\
+        include/music.h\
         include/sx.h\
         include/physics/rigidbody.h\
         include/physics/heli.h\
@@ -40,6 +41,7 @@ HEADERS=include/assets.h\
 SX_FILES=src/sx.c\
          src/assets.c\
          src/sound.c\
+         src/music.c\
          src/triggers.c\
          src/c3mission.c\
          src/c3object.c\

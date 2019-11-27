@@ -77,7 +77,6 @@ sx_world_collide_terrain(
   if(body->c[1] >= ht) return 0;
   // fprintf(stderr, "bam! %g %g %g\n", body->c[1], groundlevel, ht);
   // sound_play_random(rt.sound);
-
   // heavily dampen non-up orientation:
   body->c[1] = ht;
   e->prev_x[1] = ht;
@@ -116,7 +115,7 @@ void sx_world_move(const uint32_t dt_milli)
     // TODO: insert into 2D? hashed grid using coarse bounding sphere
   }
   // TODO collision between entities
-  // TODO: compute external forces from wind, 
+  // TODO: compute external forces from wind,
 
   // for all objects
   //   get damage points and check against bounding boxes of all other potentially overlapping

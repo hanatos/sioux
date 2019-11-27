@@ -217,7 +217,12 @@ c3_mission_load(
 
   if(file_readline(f, line)) return 1;
   mis->music = line[0];
-
+  char filename[16];
+  for(int i = 0; i != (C3_COND_SCARY - C3_COND_DIRE + 1); i++)
+  {
+     c3_triggers_parse_music(filename, mis->music, i ,'f');
+     sx_assets_load_music(&sx.assets, filename);
+  }
   if(file_readline(f, line)) return 1;
   sscanf(line, "%d", &mis->mission_type);
   if(file_readline(f, line)) return 1;

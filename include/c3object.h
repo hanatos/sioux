@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-
+#include <float.h>
 // parse ai file
 typedef struct sx_object_t
 {

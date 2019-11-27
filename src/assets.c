@@ -22,6 +22,19 @@ sx_assets_load_sound(
 }
 
 uint32_t
+sx_assets_load_music(
+    sx_assets_t *a,
+    const char *filename)
+{
+  for(int k=0;k<a->num_music;k++)
+    if(!strcmp(a->music[k].filename, filename))
+      return k;
+  assert(a->num_music < sizeof(a->music)/sizeof(sx_music_t));
+  if(sx_music_init(a->music+a->num_music, filename)) return -1;
+  return a->num_music++;
+}
+
+uint32_t
 sx_assets_load_object(
     sx_assets_t *a,
     const char *filename)

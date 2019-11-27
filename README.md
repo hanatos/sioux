@@ -40,6 +40,8 @@ well as the external tool ```pup/``` by vladimir stupin.
 ```
 $ ./sx
 ```
+For SDL2_mixer to work with fluidsynth you need to set SDL_SOUNDFONTS:
+$ export SDL_SOUNDFONTS=<path to soundfonts directory>/<soundfont filename>
 
 # known issues
 

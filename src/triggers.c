@@ -22,6 +22,12 @@ c3_triggers_identifier_to_int(
   {
     return sx_assets_load_sound(&sx.assets, id);
   }
+
+  if(len > 4 && !strncmp(id+len-4, ".mid", 4))
+  {
+    return sx_assets_load_music(&sx.assets, id);
+  }
+
   return atol(id); // parse integer number for everything else
 }
 
@@ -169,6 +175,8 @@ c3_triggers_action(
       triggers_printf(stderr, "action play sound %u\n", arg0);
       if(arg0 < 0 || arg0 > sx.assets.num_sounds) return;
       sx_sound_play(sx.assets.sound+arg0);
+      if(!Mix_PlayingMusic())
+             sx_music_play(sx.assets.music+arg0);
       break;
     case C3_ACT_VAPORIZE:     // vaporize, <object> ???
       break;
@@ -301,4 +309,25 @@ c3_triggers_check(
     if(mis->trigger[t].enabled)
       c3_triggers_check_one(mis, mis->trigger+t), enabled++;
   // triggers_printf(stderr, "ran %d/%d triggers\n", enabled, mis->num_triggers);
+}
+
+char* c3_triggers_parse_music(char* filename, char letter, int gamestate, char fg)
+{
+       int i = 0;
+
+       memset(filename, '\0', strlen(filename));
+
+       fg = tolower(fg);
+
+       if(isalpha(fg) != 0 && ( fg == 'f' || fg == 'g' ))
+         filename[i++] = fg;
+
+       if(isalpha(letter) != 0)
+         filename[i++] = tolower(letter);
+       else if(isdigit(letter) != 0 && letter != 0)
+         filename[i++] = 'n';
+
+       strncpy(&filename[i], c3_condition_midi_text[gamestate], 11);
+
+       return filename;
 }

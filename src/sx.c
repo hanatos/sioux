@@ -14,22 +14,24 @@ sx_init()
   sx_vid_init(sx.width, sx.height); // also inits SDL
 
 	// open audio device
-  SDL_AudioSpec spec = {0};
-  spec.freq = 11025;
-  spec.format = AUDIO_U8;
-  spec.channels = 1;
-  spec.samples = 4096; // buffer size
-  spec.callback = 0;
-	sx.audio_dev = SDL_OpenAudioDevice(NULL, 0, &spec, &sx.audio_spec, 0);
-  // fprintf(stderr, "[sx] got audio spec %d %d %d\n", sx.audio_spec.channels, sx.audio_spec.freq, sx.audio_spec.samples);
-  SDL_PauseAudioDevice(sx.audio_dev, 0); // start playing
+  sx.audio_spec.freq = 11025;
+  sx.audio_spec.format = AUDIO_U8;
+  sx.audio_spec.channels = 1;
+  sx.audio_spec.samples = 4096; // buffer size
+  sx.audio_spec.callback = 0;
+  sx.audio_dev = Mix_OpenAudio(sx.audio_spec.freq, sx.audio_spec.format, sx.audio_spec.channels, sx.audio_spec.samples);
+  if ( Mix_AllocateChannels(8) < 0)
+  {
+    fprintf(stderr, "Unable to allocate mixing channels: %s\n", Mix_GetError());
+    exit(EXIT_FAILURE);
+  }
+  fprintf(stderr, "[sx] got audio spec %d %d %d\n", sx.audio_spec.channels, sx.audio_spec.freq, sx.audio_spec.samples);
   return 0;
 }
 
 void
 sx_cleanup()
 {
-  SDL_PauseAudioDevice(sx.audio_dev, 1); // stop playing
-	SDL_CloseAudioDevice(sx.audio_dev);
+  Mix_CloseAudio();
   sx_vid_cleanup(); // shuts down SDL
 }
