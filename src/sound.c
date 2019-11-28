@@ -40,6 +40,7 @@ sx_sound_cleaunp(
     sx_sound_t *s)
 {
 	Mix_FreeChunk(s->chunk);
+	free(s);
 }
 
 int
