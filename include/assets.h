@@ -38,7 +38,7 @@ uint32_t sx_assets_load_music(
 
 sx_music_t* sx_assets_filename_to_music(
     sx_assets_t* a,
-    char* filename);
+    const char* filename);
 
 // returns handle and dedupes
 // use lower case file names
