@@ -38,7 +38,7 @@ sx_assets_load_music(
   return a->num_music++;
 }
 
-sx_music_t* sx_assets_filename_to_music(sx_assets_t* a, char* filename)
+sx_music_t* sx_assets_filename_to_music(sx_assets_t* a, const char* filename)
 {
 	if(a == NULL || filename == NULL)
 		return NULL;
@@ -49,7 +49,7 @@ sx_music_t* sx_assets_filename_to_music(sx_assets_t* a, char* filename)
 	for(int i=0;i<C3_COND_MIDI_SIZE;i++) 
 	{
 		fn = NULL;
-  		if(fn = strstr(filename, c3_condition_midi_text[i]))
+  		if((fn = strstr(filename, c3_condition_midi_text[i])))
         	{
 			// 'f'/'g' part of filename
 			if(isalpha(filename[0]) != 0 && (filename[0] == 'f' || filename[0] == 'g'))

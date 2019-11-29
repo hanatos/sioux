@@ -176,11 +176,8 @@ c3_triggers_action(
       triggers_printf(stderr, "action play sound %u\n", arg0);
       if(arg0 < 0 || arg0 > sx.assets.num_sounds) return;
       sx_sound_play(sx.assets.sound+arg0);
-      if(!Mix_PlayingMusic())
-      {
-      	     c3_triggers_parse_music(filename, mis->music, C3_COND_FLIGHT, 'f');
-      	     sx_music_play(sx_assets_filename_to_music(&sx.assets, filename));
-      }
+      c3_triggers_parse_music(filename, mis->music, C3_COND_FLIGHT, 'f');
+      sx_music_play(sx_assets_filename_to_music(&sx.assets, filename));
       break;
     case C3_ACT_VAPORIZE:     // vaporize, <object> ???
       break;
