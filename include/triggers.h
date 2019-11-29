@@ -35,14 +35,14 @@ c3_condition_midi_t;
 
 static const char *c3_condition_midi_text[] =
 {
-  "dire.mid\0",
-  "flight.mid\0",
-  "lwin.mid\0",
-  "win.mid\0",
-  "lose.mid\0",
-  "combat.mid\0",
-  "pad.mid\0",
-  "scary.mid\0",
+  "dire.mid",
+  "flight.mid",
+  "lwin.mid",
+  "win.mid",
+  "lose.mid",
+  "combat.mid",
+  "pad.mid",
+  "scary.mid",
 };
 
 typedef enum c3_condition_t
