@@ -22,18 +22,22 @@ typedef enum c3_condition_midi_t
 {
   C3_COND_DIRE = 0,
   C3_COND_FLIGHT,
+  C3_COND_LOSE_WIN,
   C3_COND_WIN,
   C3_COND_LOSE,
   C3_COND_COMBAT,
   C3_COND_PAD,
   C3_COND_SCARY,
+  C3_COND_MIDI_SIZE,
 }
 c3_condition_midi_t;
+
 
 static const char *c3_condition_midi_text[] =
 {
   "dire.mid\0",
   "flight.mid\0",
+  "lwin.mid\0",
   "win.mid\0",
   "lose.mid\0",
   "combat.mid\0",

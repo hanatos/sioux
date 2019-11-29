@@ -161,6 +161,7 @@ c3_triggers_action(
     uint32_t      arg0,
     uint32_t      arg1)
 {
+  char filename[32];
   // TODO
   switch(a)
   {
@@ -176,11 +177,16 @@ c3_triggers_action(
       if(arg0 < 0 || arg0 > sx.assets.num_sounds) return;
       sx_sound_play(sx.assets.sound+arg0);
       if(!Mix_PlayingMusic())
-             sx_music_play(sx.assets.music+arg0);
+      {
+      	     c3_triggers_parse_music(filename, mis->music, C3_COND_FLIGHT, 'f');
+      	     sx_music_play(sx_assets_filename_to_music(&sx.assets, filename));
+      }
       break;
     case C3_ACT_VAPORIZE:     // vaporize, <object> ???
       break;
     case C3_ACT_WIN:          // mission won
+      c3_triggers_parse_music(filename, mis->music, C3_COND_WIN, 'f');
+      sx_music_play(sx_assets_filename_to_music(&sx.assets, filename));
       break;
     case C3_ACT_CLEARCOUNTER: // restart from 1
       triggers_printf(stderr, "resetting counter\n");
@@ -327,7 +333,12 @@ char* c3_triggers_parse_music(char* filename, char letter, int gamestate, char f
        else if(isdigit(letter) != 0 && letter != 0)
          filename[i++] = 'n';
 
+       if(isalpha(letter) != 0 && (gamestate == C3_COND_WIN || gamestate == C3_COND_LOSE))
+	       gamestate = C3_COND_LOSE_WIN;
+
        strncpy(&filename[i], c3_condition_midi_text[gamestate], 11);
 
        return filename;
 }
+
+

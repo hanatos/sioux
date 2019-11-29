@@ -3,6 +3,7 @@
 #include "sound.h"
 #include "music.h"
 #include "c3object.h"
+#include "triggers.h"
 
 #include <stdint.h>
 #include <assert.h>
@@ -14,7 +15,10 @@ typedef struct sx_assets_t
   sx_sound_t sound[512];
   uint32_t num_sounds;
 
-  sx_music_t music[512];
+  sx_music_t fmusic[8][8];
+  sx_music_t gmusic[8][8];
+  sx_music_t* cur_music;
+
   uint32_t num_music;
 
   sx_object_t object[512];  // these are the unique objects
@@ -31,6 +35,10 @@ uint32_t sx_assets_load_sound(
 uint32_t sx_assets_load_music(
     sx_assets_t *a,
     const char *filename);
+
+sx_music_t* sx_assets_filename_to_music(
+    sx_assets_t* a,
+    char* filename);
 
 // returns handle and dedupes
 // use lower case file names
