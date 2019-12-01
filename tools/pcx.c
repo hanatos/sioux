@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
   fprintf(stderr, "[pcx] %u %u\n", pcx->wd, pcx->ht);
 
   uint8_t *dec = pcx->data;
-  uint8_t *end = (uint8_t *)pcx + len;
+  // uint8_t *end = (uint8_t *)pcx + len;
 	
 	uint8_t *comp = pcx->data;
   uint64_t comp_len = (uint8_t *)pcx + len - pcx->data;
@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 	dec = malloc(dec_len);
   dec_len = decompress(comp, comp_len, dec, dec_len);
   fprintf(stderr, "len comp/dec = %lu -> %lu B\n", comp_len, dec_len);
-  end = dec + pcx->wd * pcx->ht;
+  // end = dec + pcx->wd * pcx->ht;
 
   // look for endmarker "CerP" after palette
   int off = 0;

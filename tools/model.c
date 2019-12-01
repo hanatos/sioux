@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
     c3m_material_t *m0 = c3m_get_materials(h) + m;
     fprintf(stderr, "%12s", m0->texname);
     for(int k=0;k<4;k++)
-      fprintf(stderr, " % 3u", m0->dunno[k]);
+      fprintf(stderr, " %3u", m0->dunno[k]);
     fprintf(stderr, "\n");
 
     // texname seems to have leading zeroes/blanks
