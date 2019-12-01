@@ -1,4 +1,4 @@
-CC=gcc
+CC?=gcc
 CFLAGS=-Wall -std=c11
 CFLAGS+=-Iinclude -I.
 CFLAGS+=-g -ggdb3
