@@ -202,3 +202,32 @@ static inline void quat_from_euler(
   q->x[2] = t1 * t2 * t4 - t0 * t3 * t5;
   quat_normalise(q);
 }
+
+// cast to matrix. the reverse way is ugly, see
+// https://github.com/g-truc/glm/blob/0.9.8.0/glm/gtc/quaternion.inl#L627
+// and i hope we never need it.
+static inline void
+quat_to_mat3(const quat_t *q, float *m)
+{
+  float qxx = q->x[0] * q->x[0];
+  float qyy = q->x[1] * q->x[1];
+  float qzz = q->x[2] * q->x[2];
+  float qxz = q->x[0] * q->x[2];
+  float qxy = q->x[0] * q->x[1];
+  float qyz = q->x[1] * q->x[2];
+  float qwx = q->w * q->x[0];
+  float qwy = q->w * q->x[1];
+  float qwz = q->w * q->x[2];
+
+  m[0] = 1.0f - 2.0f * (qyy +  qzz);
+  m[1] = 2.0f * (qxy + qwz);
+  m[2] = 2.0f * (qxz - qwy);
+
+  m[3] = 2.0f * (qxy - qwz);
+  m[4] = 1.0f - 2.0f * (qxx +  qzz);
+  m[5] = 2.0f * (qyz + qwx);
+
+  m[6] = 2.0f * (qxz + qwy);
+  m[7] = 2.0f * (qyz - qwx);
+  m[8] = 1.0f - 2.0f * (qxx +  qyy);
+}

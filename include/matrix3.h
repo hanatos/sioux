@@ -40,6 +40,15 @@ static inline void mat3_mulv(const float *a, const float *v, float *res)
         res[j] += a[3*j+i] * v[i];
 }
 
+// multiply the transpose of the matrix to the vector
+static inline void mat3_tmulv(const float *a, const float *v, float *res)
+{
+  res[0] = res[1] = res[2] = 0.0f;
+  for(int j=0;j<3;j++)
+    for(int i=0;i<3;i++)
+        res[j] += a[3*i+j] * v[i];
+}
+
 static inline void mat3_transpose(const float *m, float *res)
 {
   for(int i=0;i<3;i++) for(int k=0;k<3;k++) res[3*k+i] = m[3*i+k];

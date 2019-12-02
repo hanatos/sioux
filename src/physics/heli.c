@@ -173,9 +173,9 @@ void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
   hl->dim[2] = l; // z length of object
 
   // drag coefficients
-  hl->cd[0] = 4.0;    // heavy drag from the sides
-  hl->cd[1] = 0.01;   // heavy but not quite as much vertically
-  hl->cd[2] = 0.0001; // streamlined forward
+  hl->cd[0] = 2.80;  // heavy drag from the sides (vstab)
+  hl->cd[1] = 0.10;  // heavy but not quite as much vertically
+  hl->cd[2] = 0.04;  // streamlined forward
 }
 
 float sx_heli_groundlevel(const sx_rigid_body_t *b)
@@ -202,7 +202,6 @@ void sx_heli_update_forces(void *hvoid, sx_rigid_body_t *b)
   a->f[0] = 0.0f;
   a->f[1] = -9.81f * b->m;
   a->f[2] = 0.0f;
-  quat_transform_inv(&b->q, a->f);
   a->r[0] = a->r[1] = a->r[2] = 0.0f; // applied equally everywhere
 
   // cyclic:
@@ -214,15 +213,19 @@ void sx_heli_update_forces(void *hvoid, sx_rigid_body_t *b)
   a->f[2] =  .03f*h->ctl.cyclic[1]; // dv: front or back
   a->f[1] = 1.0f;
   normalise(a->f);
+  const float mr = 400.0f*h->main_rotor_weight / (b->m - h->main_rotor_weight);
   // main rotor runs at fixed rpm, so we get some constant anti-torque:
   // constant expressing mass ratio rotor/fuselage, lift vs torque etc
-  const float mr = 400.0f*h->main_rotor_weight / (b->m - h->main_rotor_weight);
-  float main_rotor_torque[3] = {mr*a->f[0], mr*a->f[1], mr*a->f[2]};
+  const float main_rotor_torque[3] = {0, mr*a->f[1], 0};
+  const float main_rotor_torque1_os = main_rotor_torque[1]; //main rotor torque around y in object space
+  quat_transform(&b->q, a->r); // to world space
+  quat_transform(&b->q, a->f); // to world space
+  quat_transform(&b->q, main_rotor_torque);
   // main thrust gets weaker for great heights
   // in ground effect, fitted to a graph on dynamicflight.com says thrust improves by
   const float hp = (b->c[1]-sx_heli_groundlevel(b)) / h->main_rotor_radius; // height above ground in units of rotor diameter
   // const float inground = hp < 3.0f ? 35.f*CLAMP(.5-(hp-2.0f)/(2.0f*sqrtf(1.0f+(hp-2.0f)*(hp-2.0f))), 0.0f, 1.0f) : 0.0f;
-  const float inground = hp < 3.0f ? 14.0f*CLAMP(3.0f-hp, 0, 3.0f) : 0.0f;
+  const float inground = hp < 3.0f ? 18.0f*CLAMP(3.0f-hp, 0, 3.0f) : 0.0f;
   // height in meters where our rotor becomes ineffective (service height)
   // TODO: some soft efficiency with height?
   const float cutoff = b->c[1] > h->service_height ? 0.0f : 1.0f; // hard cutoff
@@ -238,7 +241,9 @@ void sx_heli_update_forces(void *hvoid, sx_rigid_body_t *b)
   a->r[2] = h->tlr[2];
   a->f[0] = 0.30f * b->m * h->ctl.tail; // tail thrust
   // want to counteract main rotor torque, i.e. r x f == - main rotor torque
-  a->f[0] -= main_rotor_torque[1]/a->r[2];
+  a->f[0] -= main_rotor_torque1_os/a->r[2];
+  quat_transform(&b->q, a->r); // to world space
+  quat_transform(&b->q, a->f); // to world space
 
   // drag:
   // force = 0.5 * air density * |u|^2 * A(u) * cd(u)
@@ -246,30 +251,30 @@ void sx_heli_update_forces(void *hvoid, sx_rigid_body_t *b)
   // r(u) should be the center of the projected area A(u) i think.
   a = h->act + s_act_drag;
   // i want this to turn the helicopter pointing ahead, but not too aggressively
-  a->r[0] = 0.0f;
-  a->r[1] = 0.0f;
-  a->r[2] = h->tlr[2] * 0.005f; // force acts a bit more on tail
+  a->r[0] = 0;
+  a->r[1] = 0;
+  a->r[2] = h->tlr[2] * .5f; // force acts a bit more on tail
+  quat_transform(&b->q, a->r); // to world space
   float wind[3] = {0.0f, 0.0f, 0.0f};
   // mass density kg/m^3 of air at 20C
   const float rho_air = 1.204;
   // TODO: force depends on speed of air relative to aircraft (in the absence of wind it's the speed of the pressure point, include rotation!)
   for(int k=0;k<3;k++) wind[k] -= b->v[k];
-  quat_transform_inv(&b->q, wind);
-  float Au[3] = {
-    .5f * h->dim[1]*h->dim[2],
-    .5f * h->dim[0]*h->dim[2],
-    .5f * h->dim[0]*h->dim[1]
-  };
   float vel2 = dot(wind, wind);
   if(vel2 > 0.0f)
   {
+    normalise(wind);
     float windd[3] = {wind[0], wind[1], wind[2]};
-    normalise(windd);
-    const float A = fabsf(Au[0]*wind[0])+fabsf(Au[1]*wind[1])+fabsf(Au[2]*wind[2]);
-    const float cd = fabsf(h->cd[0]*wind[0])+fabsf(h->cd[1]*wind[1])+fabsf(h->cd[2]*wind[2]);
-    const float scale = 0.010f; // arbitrary effect strength scale parameter
+    quat_transform_inv(&b->q, windd); // to object space
+    // let's fold projected area into the drag constants, too:
+    const float A = 1.0f;
+    const float cd =
+      h->cd[0]*windd[0]*windd[0] +
+      h->cd[1]*windd[1]*windd[1] + 
+      h->cd[2]*windd[2]*windd[2];
+    const float scale = 1.0f; // arbitrary effect strength scale parameter
     for(int k=0;k<3;k++)
-      a->f[k] = scale * windd[k] * .5 * rho_air * vel2 * A * cd;
+      a->f[k] = scale * wind[k] * .5 * rho_air * vel2 * A * cd;
   }
   else a->f[0] = a->f[1] = a->f[2] = 0.0f;
 
