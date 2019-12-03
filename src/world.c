@@ -100,6 +100,7 @@ sx_world_collide_terrain(
 // TODO: collision detection and interaction between objects
 void sx_world_move(const uint32_t dt_milli)
 {
+  sx_vid_clear_debug_line();
   const float dt = dt_milli / 1000.0f; // delta t in seconds
 
   // move entities based on the forces we collected during the last iteration
@@ -125,8 +126,9 @@ void sx_world_move(const uint32_t dt_milli)
   if(sx.cam.mode == s_cam_homing)
   {
     // x left; y up; z front;
-    // const float off[3] = {0, 2.3, -14};
-    float off[3] = {-5, -.5, 10};
+    // const float off[3] = {0, 2.3, -18};
+    const float off[3] = {3, 2.3, -18};
+    // const float off[3] = {-5, -.5, 10};
     const float *pos = sx.world.entity[sx.world.player_entity].body.c;
     const quat_t *q = &sx.world.entity[sx.world.player_entity].body.q;
     float wso[3] = {off[0], off[1], off[2]};
@@ -136,7 +138,7 @@ void sx_world_move(const uint32_t dt_milli)
   }
   else if(sx.cam.mode == s_cam_inside_cockpit || sx.cam.mode == s_cam_inside_no_cockpit)
   {
-    float off[3] = {0, 0.65f, 2.9f}; // front pilot's head
+    float off[3] = {0, 1.40f, 2.9f}; // front pilot's head
     const float *pos = sx.world.entity[sx.world.player_entity].body.c;
     const quat_t *q = &sx.world.entity[sx.world.player_entity].body.q;
     quat_t tmp = *q; // look down a bit

@@ -58,7 +58,7 @@ inertia_ellipsoid(const float axis[3], const float c[3], const float M, float I[
     if(j != i) // off diagonal
       I[3*j+i] += M * c[j]*c[i];
     else // diagonal:
-      I[3*j+i] -= M * (c[(i+1)%3]*c[(i+1)%3] + c[(i+2)%3]*c[(i+2)%3]);
+      I[3*j+i] += M * (c[(i+1)%3]*c[(i+1)%3] + c[(i+2)%3]*c[(i+2)%3]);
 }
 
 void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
@@ -90,8 +90,8 @@ void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
   // bounding box of comanche body 2.83345 3.15649 13.4585
 
   // let's assume we have a heavy engine and fuel tank close to the rotor:
-  float c0[] = {0, -.5, 0}, ax0[] = {1.0, 1.0, 3};
-  float M0 = 3100; // kg + fuel tank?
+  float c0[] = {0, -.5, .5}, ax0[] = {1.0, 1.0, 3};
+  float M0 = 2100; // kg + fuel tank?
 
   // main rotor:
   hl->main_rotor_radius = 11.9f/2.0f;
@@ -99,8 +99,8 @@ void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
   float M1 = 800; // kg
 
   // tail rotor:
-  float c2[] = {0, -1.5, -4.5}, ax2[] = {0.8, 1.0, 0.3};
-  float M2 = 318; // kg
+  float c2[] = {0, -2.3, -6.8}, ax2[] = {0.8, 1.0, 0.3};
+  float M2 = 418; // kg
 
   // cargo: (max load is 2296 kg)
   // TODO: distinguish between in bay and exterior!
@@ -152,10 +152,10 @@ void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
   // fprintf(stderr, " %g %g %g \n", I2[0], I2[1], I2[2]);
   // fprintf(stderr, " %g %g %g \n", I2[3], I2[4], I2[5]);
   // fprintf(stderr, " %g %g %g \n", I2[6], I2[7], I2[8]);
-  // fprintf(stderr, "I = \n");
-  // fprintf(stderr, " %g %g %g \n", I[0], I[1], I[2]);
-  // fprintf(stderr, " %g %g %g \n", I[3], I[4], I[5]);
-  // fprintf(stderr, " %g %g %g \n", I[6], I[7], I[8]);
+  fprintf(stderr, "I = \n");
+  fprintf(stderr, " %g %g %g \n", I[0], I[1], I[2]);
+  fprintf(stderr, " %g %g %g \n", I[3], I[4], I[5]);
+  fprintf(stderr, " %g %g %g \n", I[6], I[7], I[8]);
   mat3_inv(I, ent->body.invI);
 
   // our mental model for air drag is a stupid axis aligned box in object space:
@@ -173,9 +173,137 @@ void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
   hl->dim[2] = l; // z length of object
 
   // drag coefficients
-  hl->cd[0] = 2.80;  // heavy drag from the sides (vstab)
+  hl->cd[0] = 0.80;  // heavy drag from the sides (vstab)
   hl->cd[1] = 0.10;  // heavy but not quite as much vertically
   hl->cd[2] = 0.04;  // streamlined forward
+
+  // our coordinate system is x left, y up, z front (right handed)
+  // surfaces seem to work better (torque?) if we transform them:
+  // x - drag
+  // y - root -> tip
+  // z - lift
+  // regardless of handedness
+
+  // add some stabilisers for nicer flight experience:
+  hl->surf[s_heli_surf_vstab] = (sx_aerofoil_t){
+    .orient = { // columns are x y z vectors
+      0, 0, -1,
+      0, 1,  0,
+      1, 0,  0,
+    },
+    .root = {0.0f, 1.0f, hl->tlr[2]-0.4f},
+    .chord_length = 0.5f,
+    .span = 1.0f,
+    .c_drag = 0.2f,
+    .c_lift = 2.2f,
+  };
+  hl->surf[s_heli_surf_hstab_l] = (sx_aerofoil_t){
+    .orient = {
+      0, 1, 0,
+      0, 0, 1,
+      1, 0, 0,
+    },
+    .root = {0.0f, 2.1f, hl->tlr[2]-1.1f},
+    .chord_length = 0.4f,
+    .span = 1.4f,
+    .c_drag = 0.2f,
+    .c_lift = 0.8f,
+  };
+  hl->surf[s_heli_surf_hstab_r] = (sx_aerofoil_t){
+    .orient = {
+      0, -1, 0,
+      0,  0, 1,
+      1,  0, 0,
+    },
+    .root = {0.0f, 2.1f, hl->tlr[2]-1.1f},
+    .chord_length = 0.4f,
+    .span = 1.4f,
+    .c_drag = 0.2f,
+    .c_lift = 0.8f,
+  };
+
+  // model the body as aerodynamic surfaces, too:
+  hl->surf[s_heli_surf_body_bl] = (sx_aerofoil_t){
+    .orient = { // columns are x y z vectors (drag, side drag, lift)
+      0, 1,  1,
+      0, 1, -1,
+      1, 0,  0,
+    },
+    .root = {0.0f, -1.0f, -2},
+    .chord_length = 13.0f,
+    .span = 2.0f,
+    .c_drag = 0.5f,
+    .c_side_drag = 0.5f,
+    .c_lift = 0.0f,
+  };
+  hl->surf[s_heli_surf_body_br] = (sx_aerofoil_t){
+    .orient = { // columns are x y z vectors (drag, side drag, lift)
+      0, -1, -1,
+      0,  1, -1,
+      1,  0,  0,
+    },
+    .root = {0.0f, -1.0f, -2},
+    .chord_length = 13.0f,
+    .span = 2.0f,
+    .c_drag = 0.5f,
+    .c_side_drag = 0.5f,
+    .c_lift = 0.0f,
+  };
+  hl->surf[s_heli_surf_body_tl] = (sx_aerofoil_t){
+    .orient = { // columns are x y z vectors (drag, side drag, lift)
+      0,  1, 1,
+      0, -1, 1,
+      1,  0, 0,
+    },
+    .root = {0.0f, 1.0f, -2},
+    .chord_length = 13.0f,
+    .span = 2.0f,
+    .c_drag = 0.5f,
+    .c_side_drag = 0.5f,
+    .c_lift = 0.0f,
+  };
+  hl->surf[s_heli_surf_body_tr] = (sx_aerofoil_t){
+    .orient = { // columns are x y z vectors (drag, side drag, lift)
+      0, -1, -1,
+      0, -1,  1,
+      1,  0,  0,
+    },
+    .root = {0.0f, 1.0f, -2},
+    .chord_length = 13.0f,
+    .span = 2.0f,
+    .c_drag = 0.5f,
+    .c_side_drag = 0.5f,
+    .c_lift = 0.0f,
+  };
+  hl->surf[s_heli_surf_body_fr] = (sx_aerofoil_t){
+    .orient = { // columns are x y z vectors (drag, side drag, lift)
+      1, 0, 0,
+      0, 1, 0,
+      0, 0, 1,
+    },
+    .root = {0.0f, 0.0f, 4.0f},
+    .chord_length = 1.0f,
+    .span = 1.0f,
+    .c_drag = 0.04f,
+    .c_side_drag = 0.04f,
+    .c_lift = 0.0f,
+  };
+  hl->surf[s_heli_surf_body_bk] = (sx_aerofoil_t){
+    .orient = { // columns are x y z vectors (drag, side drag, lift)
+      0, 1,  0,
+      1, 0,  0,
+      0, 0, -1,
+    },
+    .root = {0.0f, 0.0f, -7.0f},
+    .chord_length = 1.0f,
+    .span = 1.0f,
+    .c_drag = 0.04f,
+    .c_side_drag = 0.04f,
+    .c_lift = 0.0f,
+  };
+
+  for(int i=0;i<s_heli_surf_cnt;i++)
+    sx_aerofoil_init_orient(hl->surf+i);
 }
 
 float sx_heli_groundlevel(const sx_rigid_body_t *b)
@@ -209,14 +337,14 @@ void sx_heli_update_forces(void *hvoid, sx_rigid_body_t *b)
   a->r[0] = h->mnr[0];
   a->r[1] = h->mnr[1];
   a->r[2] = h->mnr[2];
-  a->f[0] = -.03f*h->ctl.cyclic[0]; // du: to the sides
-  a->f[2] =  .03f*h->ctl.cyclic[1]; // dv: front or back
+  a->f[0] = -.3f*h->ctl.cyclic[0]; // du: to the sides
+  a->f[2] =  .3f*h->ctl.cyclic[1]; // dv: front or back
   a->f[1] = 1.0f;
   normalise(a->f);
   const float mr = 400.0f*h->main_rotor_weight / (b->m - h->main_rotor_weight);
   // main rotor runs at fixed rpm, so we get some constant anti-torque:
   // constant expressing mass ratio rotor/fuselage, lift vs torque etc
-  const float main_rotor_torque[3] = {0, mr*a->f[1], 0};
+  float main_rotor_torque[3] = {0, mr*a->f[1], 0};
   const float main_rotor_torque1_os = main_rotor_torque[1]; //main rotor torque around y in object space
   quat_transform(&b->q, a->r); // to world space
   quat_transform(&b->q, a->f); // to world space
@@ -245,45 +373,53 @@ void sx_heli_update_forces(void *hvoid, sx_rigid_body_t *b)
   quat_transform(&b->q, a->r); // to world space
   quat_transform(&b->q, a->f); // to world space
 
+#if 1
+  {
   // drag:
   // force = 0.5 * air density * |u|^2 * A(u) * cd(u)
   // where u is the relative air/object speed, cd the drag coefficient and A the area
-  // r(u) should be the center of the projected area A(u) i think.
   a = h->act + s_act_drag;
-  // i want this to turn the helicopter pointing ahead, but not too aggressively
   a->r[0] = 0;
   a->r[1] = 0;
-  a->r[2] = h->tlr[2] * .5f; // force acts a bit more on tail
-  quat_transform(&b->q, a->r); // to world space
+  a->r[2] = 0;
+  // quat_transform(&b->q, a->r); // to world space
   float wind[3] = {0.0f, 0.0f, 0.0f};
   // mass density kg/m^3 of air at 20C
   const float rho_air = 1.204;
-  // TODO: force depends on speed of air relative to aircraft (in the absence of wind it's the speed of the pressure point, include rotation!)
   for(int k=0;k<3;k++) wind[k] -= b->v[k];
   float vel2 = dot(wind, wind);
   if(vel2 > 0.0f)
   {
-    normalise(wind);
-    float windd[3] = {wind[0], wind[1], wind[2]};
-    quat_transform_inv(&b->q, windd); // to object space
-    // let's fold projected area into the drag constants, too:
-    const float A = 1.0f;
-    const float cd =
-      h->cd[0]*windd[0]*windd[0] +
-      h->cd[1]*windd[1]*windd[1] + 
-      h->cd[2]*windd[2]*windd[2];
-    const float scale = 1.0f; // arbitrary effect strength scale parameter
+    const float scale = 2.0f; // arbitrary effect strength scale parameter
+    quat_transform_inv(&b->q, wind); // to object space
     for(int k=0;k<3;k++)
-      a->f[k] = scale * wind[k] * .5 * rho_air * vel2 * A * cd;
+      a->f[k] = scale * h->cd[k] * wind[k] * .5 * rho_air * vel2;
+    quat_transform(&b->q, a->f); // to world space
   }
   else a->f[0] = a->f[1] = a->f[2] = 0.0f;
-
+  }
+#endif
   // dampen velocity
   // m/s -> nautical miles / h
-  // if(ms2knots(sqrtf(dot(b->v, b->v))) < 170)
-  //   b->drag = 1e-2f;
-  // else b->drag = 2e-1f;
-  // b->angular_drag = 1e-3f;
+  // XXX TODO: this needs to be limited by air flow against rotor blades i think
+  if(ms2knots(sqrtf(dot(b->v, b->v))) < 170)
+    b->drag = 0.0f;
+  else b->drag = 0.95f;
+  // b->angular_drag = 0.05f;
+
+  float wind[3] = {0.0f};
+  // TODO: force depends on speed of air relative to pressure point (in the absence
+  // of wind it's the speed of the pressure point, include rotation!)
+  // b->w: angular speed rad/s in world space around the three axes
+  // off: the offset of the pressure point in world space around center of mass
+  // lv: linear velocity of the pressure point in world space
+  // float lv[3];
+  // cross(b->w, off, lv);
+  // for(int k=0;k<3;k++) wind[k] -= lv[k];
+  for(int k=0;k<3;k++) wind[k] -= b->v[k];
+  // for(int i=0;i<s_heli_surf_cnt;i++)
+  for(int i=0;i<s_heli_surf_body_bl;i++) // XXX no body
+    sx_aerofoil_apply_forces(h->surf+i, b, wind);
 
   sx_rigid_body_apply_torque(b, main_rotor_torque);
 

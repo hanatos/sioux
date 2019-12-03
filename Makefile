@@ -33,6 +33,7 @@ HEADERS=include/assets.h\
         include/music.h\
         include/sx.h\
         include/physics/rigidbody.h\
+        include/physics/aerofoil.h\
         include/physics/heli.h\
         include/world.h\
         include/triggers.h

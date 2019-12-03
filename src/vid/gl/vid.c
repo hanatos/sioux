@@ -102,6 +102,7 @@ recompile()
   CC(blit_texture, "fstri", "blit");
   CC(grade, "fstri", "hud_horizon");
   CC(hero, "hero", "hero");
+  CC(debug_line, "hero", "line");
 }
 
 static void
@@ -226,6 +227,16 @@ int sx_vid_init(
   recompile();
   glGenVertexArrays(1, &sx.vid.vao_empty);
 
+  // debug lines
+  glGenVertexArrays(1, &sx.vid.vao_debug_line);
+  glBindVertexArray(sx.vid.vao_debug_line);
+  glGenBuffers(1, &sx.vid.vbo_debug_line);
+  glBindBuffer(GL_ARRAY_BUFFER, sx.vid.vbo_debug_line);
+  glNamedBufferStorage(sx.vid.vbo_debug_line, sizeof(sx.vid.debug_line_vx), sx.vid.debug_line_vx, GL_DYNAMIC_STORAGE_BIT);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+  glEnableVertexArrayAttrib(sx.vid.vao_debug_line, 0);
+  glBindAttribLocation(sx.vid.program_debug_line, 0, "position");
+
   // heads up display:
   glGenVertexArrays(1, &sx.vid.vao_hud);
   glBindVertexArray(sx.vid.vao_hud);
@@ -342,7 +353,7 @@ uint32_t sx_vid_init_geo(const char *filename, float *aabb)
     {
       c3m_material_t *mt = c3m_get_materials(h)+m;
       g->mat[m].texname[0] = 0;
-      strncpy(g->mat[m].texname, mt->texname, sizeof(mt->texname));
+      strncpy(g->mat[m].texname, mt->texname, sizeof(g->mat[m].texname));
       g->mat[m].texu = -1;
       g->mat[m].texid = -1;
       if(g->mat[m].texname[0])
@@ -694,6 +705,45 @@ void sx_vid_render_frame()
       // draw all entities from world which in turn draw their stuff
       for(int e=0;e<sx.world.num_entities;e++)
         sx_world_render_entity(e);
+
+      // draw debug force lines
+      if(sx.vid.program_debug_line != -1 && sx.vid.debug_line_cnt)
+      {
+        uint32_t program = sx.vid.program_debug_line;
+        glUseProgram(program);
+        glUniform1i(glGetUniformLocation(program, "u_cube_side"), k);
+        glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
+        glUniform1f(glGetUniformLocation(program, "u_hfov"), sx.cam.hfov);
+        glUniform1f(glGetUniformLocation(program, "u_vfov"), sx.cam.vfov);
+        glUniform2f(glGetUniformLocation(program, "u_res"),
+            sx.vid.cube[k]->width, sx.vid.cube[k]->height);
+        glUniform1i(glGetUniformLocation(program, "u_frame"), sx.time);
+        glUniform3f(glGetUniformLocation(program, "u_pos_ws"),
+            sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
+
+        // we have lines almost directly in world space
+        sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
+        float mvx[3] = {
+          ent->body.c[0]-sx.cam.x[0],
+          ent->body.c[1]-sx.cam.x[1],
+          ent->body.c[2]-sx.cam.x[2]};
+        quat_t mvq = sx.cam.q;
+        quat_conj(&mvq);
+        quat_transform(&mvq, mvx);
+
+        glUniform3f(glGetUniformLocation(program, "u_old_pos"),
+            mvx[0], mvx[1], mvx[2]);
+        glUniform4f(glGetUniformLocation(program, "u_old_q"),
+            mvq.x[0], mvq.x[1], mvq.x[2], mvq.w);
+        glUniform3f(glGetUniformLocation(program, "u_pos"),
+            mvx[0], mvx[1], mvx[2]);
+        glUniform4f(glGetUniformLocation(program, "u_q"),
+            mvq.x[0], mvq.x[1], mvq.x[2], mvq.w);
+        glLineWidth(1.5f*sx.width/1024.0f);
+        glNamedBufferSubData(sx.vid.vbo_debug_line, 0, sizeof(sx.vid.debug_line_vx), sx.vid.debug_line_vx);
+        glBindVertexArray(sx.vid.vao_debug_line);
+        glDrawArrays(GL_LINES, 0, sx.vid.debug_line_cnt/6);
+      }
 
       glDisable(GL_DEPTH_TEST);
       // glDisable(GL_BLEND);
@@ -1070,4 +1120,25 @@ int sx_vid_handle_input()
     }
   }
   return 0;
+}
+
+void
+sx_vid_clear_debug_line()
+{
+  sx.vid.debug_line_cnt = 0;
+}
+
+void
+sx_vid_add_debug_line(
+    const float *v0,
+    const float *v1)
+{
+  if(sx.vid.debug_line_cnt >= sizeof(sx.vid.debug_line_vx)/sizeof(sx.vid.debug_line_vx[0]) - 6)
+    return;
+  sx.vid.debug_line_vx[sx.vid.debug_line_cnt++] = v0[0];
+  sx.vid.debug_line_vx[sx.vid.debug_line_cnt++] = v0[1];
+  sx.vid.debug_line_vx[sx.vid.debug_line_cnt++] = v0[2];
+  sx.vid.debug_line_vx[sx.vid.debug_line_cnt++] = v1[0];
+  sx.vid.debug_line_vx[sx.vid.debug_line_cnt++] = v1[1];
+  sx.vid.debug_line_vx[sx.vid.debug_line_cnt++] = v1[2];
 }

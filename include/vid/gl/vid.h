@@ -40,7 +40,8 @@ typedef struct sx_vid_t
 
   uint32_t program_blit_texture, program_draw_texture,
            program_taa, vao_empty, program_grade, program_hero,
-           program_draw_hud, program_hud_text;
+           program_draw_hud, program_hud_text,
+           program_debug_line;
 
   uint32_t vao_hud, vbo_hud;
   sx_hud_t hud;
@@ -50,6 +51,10 @@ typedef struct sx_vid_t
   uint32_t hud_text_font;  // texture id
   float hud_text_vx[800], hud_text_uv[800];
   uint32_t hud_text_id[600];
+
+  uint32_t debug_line_cnt;
+  float debug_line_vx[2000];
+  uint32_t vao_debug_line, vbo_debug_line;
 
   fbo_t *fbo0, *fbo1; // ping pong fbos for taa
   fbo_t *fbo;         // current pointer
@@ -68,3 +73,5 @@ typedef struct sx_vid_t
 }
 sx_vid_t;
 
+void sx_vid_add_debug_line(const float *v0, const float *v1);
+void sx_vid_clear_debug_line();

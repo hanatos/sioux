@@ -1,5 +1,6 @@
 #pragma once
 #include "rigidbody.h"
+#include "aerofoil.h"
 #include "world.h"
 
 typedef enum sx_actuator_type_t
@@ -52,11 +53,28 @@ typedef enum sx_heli_damage_t
 }
 sx_heli_damage_t;
 
+typedef enum sx_heli_surf_t
+{
+  s_heli_surf_vstab = 0,
+  s_heli_surf_hstab_l,
+  s_heli_surf_hstab_r,
+  s_heli_surf_body_bl,
+  s_heli_surf_body_br,
+  s_heli_surf_body_tl,
+  s_heli_surf_body_tr,
+  s_heli_surf_body_fr,
+  s_heli_surf_body_bk,
+  s_heli_surf_cnt,
+}
+sx_heli_surf_t;
+
 typedef struct sx_heli_t
 {
   sx_heli_control_t ctl;
   sx_actuator_t act[s_act_num];
   sx_entity_t *entity;
+
+  sx_aerofoil_t surf[s_heli_surf_cnt];
 
   float dim[3]; // dimensions of box used as flight model
   float cd[3];  // drag coefficients for main axes

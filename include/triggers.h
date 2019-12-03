@@ -33,6 +33,7 @@ typedef enum c3_condition_midi_t
 c3_condition_midi_t;
 
 
+__attribute__ ((unused))
 static const char *c3_condition_midi_text[] =
 {
   "dire.mid",
@@ -65,6 +66,7 @@ typedef enum c3_condition_t
 }
 c3_condition_t;
 
+__attribute__ ((unused))
 static const char *c3_condition_text[] =
 {
   "nearer",
@@ -93,6 +95,7 @@ typedef enum c3_operator_t
 }
 c3_operator_t;
 
+__attribute__ ((unused))
 static const char *c3_operator_text[] =
 {
   "and",
@@ -114,6 +117,7 @@ typedef enum c3_action_t
 }
 c3_action_t;
 
+__attribute__ ((unused))
 static const char *c3_action_text[] =
 {
   "text",

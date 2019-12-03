@@ -4,6 +4,9 @@
 #include "matrix3.h"
 #include <assert.h>
 
+// fwd declare
+void sx_vid_add_debug_line(const float *v0, const float *v1);
+
 typedef struct sx_actuator_t
 {
   float r[3];      // coordinates where force is applied, object space [m], in particular relative to center of mass
@@ -54,6 +57,15 @@ static inline void sx_rigid_body_apply_force(
   // collect actuator force, linear part:
   for(int k=0;k<3;k++) b->force[k] += act->f[k];
 
+#if 1
+  float v0[3] = {0, 0, 2}, v1[3] = {0, 0, 10};
+  for(int k=0;k<3;k++) v0[k] = act->r[k];
+  for(int k=0;k<3;k++) v1[k] = act->r[k] + act->f[k];
+  float w0[3] = {-v0[0], -v0[2], v0[1]};
+  float w1[3] = {-v1[0], -v1[2], v1[1]};
+  sx_vid_add_debug_line(w0, w1);
+#endif
+
   float fw[3]; // torque or angular force
   cross(act->r, act->f, fw);
   sx_rigid_body_apply_torque(b, fw);
@@ -99,18 +111,14 @@ static inline void sx_rigid_body_eval(
 
   for(int k=0;k<3;k++) b->c[k] += dt * deriv->v[k]; // integrate position in world space
 
-  // artificial dampening:
-  const float fv = powf(1.0f-b->drag, dt);
-  b->pv[0] *= fv;
-  b->pv[1] *= fv;
-  b->pv[2] *= fv;
-  const float fw = powf(1.0f-b->angular_drag, dt);
-  b->pw[0] *= fw;
-  b->pw[1] *= fw;
-  b->pw[2] *= fw;
-
   for(int k=0;k<3;k++) b->pw[k] += deriv->torque[k] * dt; // integrate angular momentum in world space
   for(int k=0;k<3;k++) b->pv[k] += deriv->force[k]  * dt; // accumulate linear momentum in world space
+
+  // artificial dampening:
+  const float fv = 1-b->drag;//powf(1.0f-b->drag, dt);
+  for(int k=0;k<3;k++) b->pv[k] *= fv;
+  const float fw = 1-b->angular_drag;//powf(1.0f-b->angular_drag, dt);
+  for(int k=0;k<3;k++) b->pw[k] *= fw;
 
   sx_rigid_body_recalculate(b);
 }
