@@ -596,25 +596,23 @@ uint32_t sx_vid_init_image(const char *filename, uint32_t *texid)
   // count trailing zeros:
   uint32_t z = 0;
   int len = strlen(fn);
+  // sometimes it's also the case that the first frame is 01, unfortunately.
+  // but this way of detecting it fails because there are plenty of 01 02 variants
+  // that are not at all animations :/
+  int off = 0;
+  // if(fn[len-5] == '0' || fn[len-5] == '1') z = 1;
+  // if(fn[len-5] == '1') off = 1;
+  if(fn[len-5] == '0') z = 1;
   while(len-5-z > 0 && fn[len-5-z] == '0') z++;
   fn[len-4-z] = 0;
 
   char pattern[150] = {0};
   if(z > 0) snprintf(pattern, sizeof(pattern), "%s%%0%uu.png", fn, z);
   else      snprintf(pattern, sizeof(pattern), "%s.png", fn);
-  for(int i=0;i<30;i++)
-  { // don't go over memory bound, max textures is 30
-    snprintf(fn, sizeof(fn), pattern, i);
-
-    FILE *f = file_open(fn);
-    int missing = f == 0;
-    if(f) fclose(f);
-    if(missing && (cnt == 0))
-    { // somewhat redundant test, but want to avoid [png] error messages triggering below.
-      fprintf(stderr, "[vid] file `%s'not found\n", fn);
-      return 0;
-    }
-    else if(missing && (cnt > 0)) return cnt;
+  int prev_wd = 0, prev_ht = 0;
+  for(int i=0;i<32;i++)
+  { // don't go over memory bound, max textures is 32
+    snprintf(fn, sizeof(fn), pattern, i+off);
 
     int width, height, bpp;
     uint8_t *buf;
@@ -626,6 +624,14 @@ uint32_t sx_vid_init_image(const char *filename, uint32_t *texid)
     }
     else if(err && (cnt > 0)) return cnt;
     assert(bpp == 8);
+
+    if(i > off && (prev_wd != width || prev_ht != height))
+    { // apparently not an animated texture after all
+      free(buf);
+      return cnt;
+    }
+    prev_wd = width;
+    prev_ht = height;
 
     glGenTextures(1, texid+i);
     glBindTexture(GL_TEXTURE_2D, texid[i]);
@@ -674,7 +680,8 @@ sx_vid_render_geo(
   {
     tu = g->mat[m].texu; // only if not already bound by earlier material
     uint32_t ti = (sx.time/250) % g->mat[m].tex_cnt;
-    glBindTextureUnit(g->mat[m].texu, g->mat[m].texid[ti]);
+    if(g->mat[m].texid[ti] != -1)
+      glBindTextureUnit(g->mat[m].texu, g->mat[m].texid[ti]);
   }
 
   glBindTextureUnit(9, g->mat_tex);
@@ -1141,6 +1148,9 @@ int sx_vid_handle_input()
       case SDL_JOYBUTTONDOWN:
       switch(event.jbutton.button)
       {
+        case 0: // pretend we have a cannon. man this has lag!
+          sx_sound_loop(sx.assets.sound+sx.mission.snd_cannon, -1, 5);
+          break;
         case 3:
           sx_heli_control_tail(sx.world.player_move, -1);
           break;

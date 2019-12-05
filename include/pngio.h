@@ -115,11 +115,7 @@ png_read(
     int *bpp)
 {
   FILE *f = file_open(filename);
-  if(!f)
-  {
-    fprintf(stderr, "[png] could not open image %s\n", filename);
-    return 1;
-  }
+  if(!f) return 1;
 
 #define NUM_BYTES_CHECK (8)
 

@@ -47,8 +47,24 @@ int
 sx_sound_play(
     sx_sound_t *s)
 {
-  fprintf(stderr, "[sound] playing %s\n", s->filename);
+  // fprintf(stderr, "[sound] playing %s\n", s->filename);
   Mix_PlayChannel(-1, s->chunk, 0);
   return 0;
 }
 
+int
+sx_sound_loop(
+    sx_sound_t *s,
+    int channel,
+    int count)
+{
+  Mix_PlayChannel(channel, s->chunk, count);
+  return 0;
+}
+
+int
+sx_sound_stop_loop(
+    int channel)
+{
+  return Mix_FadeOutChannel(channel, 20);
+}

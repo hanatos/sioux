@@ -63,6 +63,13 @@ typedef struct c3_mission_t
   c3_trigger_t trigger[1000];
   uint32_t counter;
   uint32_t time;
+
+  // global sounds for the hero comanche:
+  uint32_t snd_engine;
+  uint32_t snd_warn_speed;
+  uint32_t snd_warn_lock;
+  uint32_t snd_warn_torque;
+  uint32_t snd_cannon;
 }
 c3_mission_t;
 

@@ -10,7 +10,7 @@
 typedef struct sx_material_t
 {
   char texname[15];   // texture file name, .3do supports 12 chars
-  uint32_t texid[30]; // texture id, possibly up to 30 frames in an animation
+  uint32_t texid[32]; // texture id, possibly up to 32 frames in an animation
   uint32_t tex_cnt;   // number of texture frames
   int32_t  texu;      // texture unit
   uint32_t dunno[4];  // some extra info

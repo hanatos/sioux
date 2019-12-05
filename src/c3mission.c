@@ -11,6 +11,7 @@ int
 c3_mission_begin(
     c3_mission_t *mis)
 {
+  sx_sound_loop(sx.assets.sound+mis->snd_engine, -1, 1000);
   uint32_t objectid = 0;
   uint32_t startposid = 0;
   quat_t q;
@@ -302,6 +303,13 @@ c3_mission_load(
   mis->counter = 0;
 
   // XXX TODO: we still need to load .ord .inf for briefing
+
+  // load global sounds
+  mis->snd_engine      = sx_assets_load_sound(&sx.assets, "inside.wav");
+  mis->snd_warn_speed  = sx_assets_load_sound(&sx.assets, "spedwarn.wav");
+  mis->snd_warn_lock   = sx_assets_load_sound(&sx.assets, "warnlock.wav");
+  mis->snd_warn_torque = sx_assets_load_sound(&sx.assets, "warntorq.wav");
+  mis->snd_cannon      = sx_assets_load_sound(&sx.assets, "cannon.wav");
 
   // it follows: triggers (see triggers.h)
   return c3_triggers_parse(mis, f);
