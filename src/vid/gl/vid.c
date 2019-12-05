@@ -280,7 +280,7 @@ int sx_vid_init(
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sx.vid.vbo_hud_text[2]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(sx.vid.hud_text_id), sx.vid.hud_text_id, GL_STATIC_DRAW);
 
-  sx.vid.hud_text_font = sx_vid_init_image("assets/hud-font.png");
+  sx_vid_init_image("assets/hud-font.png", &sx.vid.hud_text_font);
   sx.vid.hud_text_chars = 0;
 
   sx.vid.joystick = 0;
@@ -355,18 +355,20 @@ uint32_t sx_vid_init_geo(const char *filename, float *aabb)
       g->mat[m].texname[0] = 0;
       strncpy(g->mat[m].texname, mt->texname, sizeof(g->mat[m].texname));
       g->mat[m].texu = -1;
-      g->mat[m].texid = -1;
+      g->mat[m].texid[0] = -1;
+      g->mat[m].tex_cnt = 0;
       if(g->mat[m].texname[0])
       {
         for(int i=0;i<m;i++) if(!strcmp(g->mat[m].texname, g->mat[i].texname))
         {
           g->mat[m].texu = g->mat[i].texu;
-          g->mat[m].texid = g->mat[i].texid;
+          memcpy(g->mat[m].texid, g->mat[i].texid, sizeof(g->mat[m].texid));
+          g->mat[m].tex_cnt = g->mat[i].tex_cnt;
           break;
         }
         if(g->mat[m].texu == -1)
         {
-          g->mat[m].texid = sx_vid_init_image(g->mat[m].texname);
+          g->mat[m].tex_cnt = sx_vid_init_image(g->mat[m].texname, g->mat[m].texid);
           g->mat[m].texu = tu++;
         }
       }
@@ -581,41 +583,65 @@ int sx_vid_init_terrain(
   return 0;
 }
 
-// load texture file, return handle or -1
-uint32_t sx_vid_init_image(const char *filename)
+// load texture file, return texture count or 0
+uint32_t sx_vid_init_image(const char *filename, uint32_t *texid)
 {
-  if(filename[0] == 0) return -1;
+  if(filename[0] == 0) return 0;
   // mangle from PCX to lowercase png
-  char fn[256];
+  char fn[128];
   png_from_pcx(filename, fn, sizeof(fn));
 
-  // TODO: coalesce? need to put together into one big texture?
-  uint32_t texid;
-  glGenTextures(1, &texid);
-  glBindTexture(GL_TEXTURE_2D, texid);
+  int cnt = 0; // how many textures in an animation?
+  // apparently a '0' suffix means that the texture will be animated.
+  // count trailing zeros:
+  uint32_t z = 0;
+  int len = strlen(fn);
+  while(len-5-z > 0 && fn[len-5-z] == '0') z++;
+  fn[len-4-z] = 0;
 
-  int width, height, bpp;
-  uint8_t *buf;
-  int err = png_read(fn, &width, &height, (void**)&buf, &bpp);
-  if(err)
-  {
-    fprintf(stderr, "[vid] failed to open `%s'\n", filename);
-    return -1;
+  char pattern[150] = {0};
+  if(z > 0) snprintf(pattern, sizeof(pattern), "%s%%0%uu.png", fn, z);
+  else      snprintf(pattern, sizeof(pattern), "%s.png", fn);
+  for(int i=0;i<30;i++)
+  { // don't go over memory bound, max textures is 30
+    snprintf(fn, sizeof(fn), pattern, i);
+
+    FILE *f = file_open(fn);
+    int missing = f == 0;
+    if(f) fclose(f);
+    if(missing && (cnt == 0))
+    { // somewhat redundant test, but want to avoid [png] error messages triggering below.
+      fprintf(stderr, "[vid] file `%s'not found\n", fn);
+      return 0;
+    }
+    else if(missing && (cnt > 0)) return cnt;
+
+    int width, height, bpp;
+    uint8_t *buf;
+    int err = png_read(fn, &width, &height, (void**)&buf, &bpp);
+    if(err && (cnt == 0))
+    {
+      fprintf(stderr, "[vid] failed to open `%s'\n", filename);
+      return 0;
+    }
+    else if(err && (cnt > 0)) return cnt;
+    assert(bpp == 8);
+
+    glGenTextures(1, texid+i);
+    glBindTexture(GL_TEXTURE_2D, texid[i]);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_SRGB8_ALPHA8, width, height);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA,
+        GL_UNSIGNED_BYTE, buf);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    free(buf);
+    cnt++;
+    // fprintf(stderr, "[vid] loading texture `%s'\n", fn);
   }
-  assert(bpp == 8);
-
-  glTexStorage2D(GL_TEXTURE_2D, 1, GL_SRGB8_ALPHA8, width, height);
-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA,
-      GL_UNSIGNED_BYTE, buf);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-  free(buf);
-  // fprintf(stderr, "[vid] loading texture `%s'\n", fn);
-
-  return texid;
+  return cnt;
 }
 
 void
@@ -647,7 +673,8 @@ sx_vid_render_geo(
   for(int m=0;m<g->num_mat;m++) if(g->mat[m].texu > tu)
   {
     tu = g->mat[m].texu; // only if not already bound by earlier material
-    glBindTextureUnit(g->mat[m].texu, g->mat[m].texid);
+    uint32_t ti = (sx.time/250) % g->mat[m].tex_cnt;
+    glBindTextureUnit(g->mat[m].texu, g->mat[m].texid[ti]);
   }
 
   glBindTextureUnit(9, g->mat_tex);

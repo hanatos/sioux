@@ -18,8 +18,8 @@ void sx_vid_end_mission();
 // if aabb is given, will be filled with geo aabb
 uint32_t sx_vid_init_geo(const char *filename, float *aabb);
 
-// load texture file, return handle
-uint32_t sx_vid_init_image(const char *filename);
+// load texture file, return count if animated, init texid
+uint32_t sx_vid_init_image(const char *filename, uint32_t *texid);
 
 // load terrain textures
 int sx_vid_init_terrain(
