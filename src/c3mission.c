@@ -92,7 +92,7 @@ c3_mission_begin(
   sx.cam.hfov = 2.64;
   sx.cam.vfov = sx.cam.hfov * sx.height/(float)sx.width;
   float off[3] = {20.0f, 20.0f, 20.0f};
-  sx_camera_target(&sx.cam, pos, &q, off, 1);
+  sx_camera_target(&sx.cam, pos, &q, off, 1, 1);
   sx_camera_move(&sx.cam, 1);
 
   // add movement controller:

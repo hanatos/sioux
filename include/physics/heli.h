@@ -58,12 +58,6 @@ typedef enum sx_heli_surf_t
   s_heli_surf_vstab = 0,
   s_heli_surf_hstab_l,
   s_heli_surf_hstab_r,
-  s_heli_surf_body_bl,
-  s_heli_surf_body_br,
-  s_heli_surf_body_tl,
-  s_heli_surf_body_tr,
-  s_heli_surf_body_fr,
-  s_heli_surf_body_bk,
   s_heli_surf_cnt,
 }
 sx_heli_surf_t;

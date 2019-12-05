@@ -166,7 +166,11 @@ sx_coma_render(uint32_t ei, sx_heli_t *h)
     if(g==1) continue; // skip static rotor
     if(g==18) continue; // no extra weapons on side
     // TODO: special treatment: if bl2 (main rotor in motion), push vertices up depending on cyclic!
-    if(g == 14 && sx.cam.mode == s_cam_inside_cockpit) continue; // don't render our head
+    if(g == 14 &&
+       ((sx.cam.mode == s_cam_inside_cockpit) ||
+        (sx.cam.mode == s_cam_left) ||
+        (sx.cam.mode == s_cam_right)))
+      continue; // don't render our head
 
     float anim = sx.time;
     // if(g == 2 || g == 3) // main or tail rotor

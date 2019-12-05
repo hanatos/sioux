@@ -29,6 +29,7 @@ typedef struct sx_camera_t
   quat_t target_q;
   float target_x[3];
   float target_rate;
+  float orient_rate;
 
   float angle_down, angle_right;
 
@@ -47,10 +48,11 @@ static inline void sx_camera_move(sx_camera_t *cam, const float dt)
     cam->prev_x[k] = cam->x[k];
   cam->prev_q = cam->q;
 
-  const float r = 1.0f-powf(1.0f-cam->target_rate, dt/0.02f);
+  const float rx = 1.0f-powf(1.0f-cam->target_rate, dt/0.02f);
+  const float rq = 1.0f-powf(1.0f-cam->orient_rate, dt/0.02f);
   for(int k=0;k<3;k++)
-    cam->x[k] = cam->prev_x[k] * (1.0f-r) + cam->target_x[k] * r;
-  quat_slerp(&cam->prev_q, &cam->target_q, r, &cam->q);
+    cam->x[k] = cam->prev_x[k] * (1.0f-rx) + cam->target_x[k] * rx;
+  quat_slerp(&cam->prev_q, &cam->target_q, rq, &cam->q);
   quat_normalise(&cam->q);
 }
 
@@ -59,17 +61,20 @@ static inline void sx_camera_target(
     const float *x,   // position of target
     const quat_t *q,  // orientation (object to world) of target
     const float *off, // offset in world space
-    float rate)       // convergence rate, higher is faster (<=1.0)
+    float x_rate,     // convergence rate for position
+    float q_rate)     // convergence rate, higher is faster (<=1.0)
 {
   for(int k=0;k<3;k++) cam->target_x[k] = x[k] + off[k];
   cam->target_q = *q;
-  cam->target_rate = rate;
+  cam->target_rate = x_rate;
+  cam->orient_rate = q_rate;
 }
 
 static inline void sx_camera_lookat(
     sx_camera_t *cam,
     const float *lookat, // world space look at coordinates
-    float rate)
+    float x_rate,
+    float q_rate)
 {
   quat_t q;
   float to[3] = {lookat[0] - cam->x[0], lookat[1] - cam->x[1], lookat[2] - cam->x[2]};
@@ -81,5 +86,6 @@ static inline void sx_camera_lookat(
   quat_normalise(&q);
 
   cam->target_q = q;
-  cam->target_rate = rate;
+  cam->target_rate = x_rate;
+  cam->orient_rate = q_rate;
 }

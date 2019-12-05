@@ -936,7 +936,7 @@ int sx_vid_handle_input()
           sx.cam.x[2] += 2*event.motion.yrel;
           sx.cam.x[1] = sx_world_get_height(sx.cam.x)+10.0f;
           float off[3] = {0, 0.0, 0};
-          sx_camera_target(&sx.cam, sx.cam.x, &sx.cam.q, off, 1.0f);
+          sx_camera_target(&sx.cam, sx.cam.x, &sx.cam.q, off, 1.0f, 1.0f);
         }
         break;
       case SDL_KEYDOWN:
@@ -970,6 +970,12 @@ int sx_vid_handle_input()
         case SDLK_F6:
           sx.cam.mode = s_cam_homing;
           break;
+        case SDLK_F7:
+          sx.cam.mode = s_cam_left;
+          break;
+        case SDLK_F8:
+          sx.cam.mode = s_cam_right;
+          break;
         case SDLK_d: // down
           {
             float pos[3] = {sx.cam.x[0], 0.0, sx.cam.x[2]};
@@ -977,7 +983,7 @@ int sx_vid_handle_input()
             float off[3] = {0, 1, 0};
             quat_t q;
             quat_init_angle(&q, 0, 1, 0, 0);
-            sx_camera_target(&sx.cam, pos, &q, off, 0.02f);
+            sx_camera_target(&sx.cam, pos, &q, off, 0.02f, 0.02f);
           }
           break;
         case SDLK_t: // top
@@ -986,9 +992,9 @@ int sx_vid_handle_input()
             float off[3] = {0, 0, 0};
             quat_t q;
             quat_init_angle(&q, M_PI/2.0f, 1, 0, 0);
-            sx_camera_target(&sx.cam, pos, &q, off, 1.0f);
+            sx_camera_target(&sx.cam, pos, &q, off, 1.0f, 1.0f);
             sx_camera_move(&sx.cam, 0.01f);
-            sx_camera_target(&sx.cam, pos, &q, off, 0.02f);
+            sx_camera_target(&sx.cam, pos, &q, off, 0.02f, 0.02f);
           }
           break;
         case SDLK_1:

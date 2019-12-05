@@ -152,10 +152,10 @@ void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
   // fprintf(stderr, " %g %g %g \n", I2[0], I2[1], I2[2]);
   // fprintf(stderr, " %g %g %g \n", I2[3], I2[4], I2[5]);
   // fprintf(stderr, " %g %g %g \n", I2[6], I2[7], I2[8]);
-  fprintf(stderr, "I = \n");
-  fprintf(stderr, " %g %g %g \n", I[0], I[1], I[2]);
-  fprintf(stderr, " %g %g %g \n", I[3], I[4], I[5]);
-  fprintf(stderr, " %g %g %g \n", I[6], I[7], I[8]);
+  // fprintf(stderr, "I = \n");
+  // fprintf(stderr, " %g %g %g \n", I[0], I[1], I[2]);
+  // fprintf(stderr, " %g %g %g \n", I[3], I[4], I[5]);
+  // fprintf(stderr, " %g %g %g \n", I[6], I[7], I[8]);
   mat3_inv(I, ent->body.invI);
 
   // our mental model for air drag is a stupid axis aligned box in object space:
@@ -220,86 +220,6 @@ void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
     .span = 1.4f,
     .c_drag = 0.2f,
     .c_lift = 0.8f,
-  };
-
-  // model the body as aerodynamic surfaces, too:
-  hl->surf[s_heli_surf_body_bl] = (sx_aerofoil_t){
-    .orient = { // columns are x y z vectors (drag, side drag, lift)
-      0, 1,  1,
-      0, 1, -1,
-      1, 0,  0,
-    },
-    .root = {0.0f, -1.0f, -2},
-    .chord_length = 13.0f,
-    .span = 2.0f,
-    .c_drag = 0.5f,
-    .c_side_drag = 0.5f,
-    .c_lift = 0.0f,
-  };
-  hl->surf[s_heli_surf_body_br] = (sx_aerofoil_t){
-    .orient = { // columns are x y z vectors (drag, side drag, lift)
-      0, -1, -1,
-      0,  1, -1,
-      1,  0,  0,
-    },
-    .root = {0.0f, -1.0f, -2},
-    .chord_length = 13.0f,
-    .span = 2.0f,
-    .c_drag = 0.5f,
-    .c_side_drag = 0.5f,
-    .c_lift = 0.0f,
-  };
-  hl->surf[s_heli_surf_body_tl] = (sx_aerofoil_t){
-    .orient = { // columns are x y z vectors (drag, side drag, lift)
-      0,  1, 1,
-      0, -1, 1,
-      1,  0, 0,
-    },
-    .root = {0.0f, 1.0f, -2},
-    .chord_length = 13.0f,
-    .span = 2.0f,
-    .c_drag = 0.5f,
-    .c_side_drag = 0.5f,
-    .c_lift = 0.0f,
-  };
-  hl->surf[s_heli_surf_body_tr] = (sx_aerofoil_t){
-    .orient = { // columns are x y z vectors (drag, side drag, lift)
-      0, -1, -1,
-      0, -1,  1,
-      1,  0,  0,
-    },
-    .root = {0.0f, 1.0f, -2},
-    .chord_length = 13.0f,
-    .span = 2.0f,
-    .c_drag = 0.5f,
-    .c_side_drag = 0.5f,
-    .c_lift = 0.0f,
-  };
-  hl->surf[s_heli_surf_body_fr] = (sx_aerofoil_t){
-    .orient = { // columns are x y z vectors (drag, side drag, lift)
-      1, 0, 0,
-      0, 1, 0,
-      0, 0, 1,
-    },
-    .root = {0.0f, 0.0f, 4.0f},
-    .chord_length = 1.0f,
-    .span = 1.0f,
-    .c_drag = 0.04f,
-    .c_side_drag = 0.04f,
-    .c_lift = 0.0f,
-  };
-  hl->surf[s_heli_surf_body_bk] = (sx_aerofoil_t){
-    .orient = { // columns are x y z vectors (drag, side drag, lift)
-      0, 1,  0,
-      1, 0,  0,
-      0, 0, -1,
-    },
-    .root = {0.0f, 0.0f, -7.0f},
-    .chord_length = 1.0f,
-    .span = 1.0f,
-    .c_drag = 0.04f,
-    .c_side_drag = 0.04f,
-    .c_lift = 0.0f,
   };
 
   for(int i=0;i<s_heli_surf_cnt;i++)
@@ -417,8 +337,7 @@ void sx_heli_update_forces(void *hvoid, sx_rigid_body_t *b)
   // cross(b->w, off, lv);
   // for(int k=0;k<3;k++) wind[k] -= lv[k];
   for(int k=0;k<3;k++) wind[k] -= b->v[k];
-  // for(int i=0;i<s_heli_surf_cnt;i++)
-  for(int i=0;i<s_heli_surf_body_bl;i++) // XXX no body
+  for(int i=0;i<s_heli_surf_cnt;i++)
     sx_aerofoil_apply_forces(h->surf+i, b, wind);
 
   sx_rigid_body_apply_torque(b, main_rotor_torque);

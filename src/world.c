@@ -133,12 +133,12 @@ void sx_world_move(const uint32_t dt_milli)
     const quat_t *q = &sx.world.entity[sx.world.player_entity].body.q;
     float wso[3] = {off[0], off[1], off[2]};
     quat_transform(q, wso); // convert object to world space
-    sx_camera_target(&sx.cam, pos, q, wso, 0.03f);
-    sx_camera_lookat(&sx.cam, pos, 0.03f);
+    sx_camera_target(&sx.cam, pos, q, wso, 0.03f, 0.03f);
+    sx_camera_lookat(&sx.cam, pos, 0.03f, 0.03f);
   }
   else if(sx.cam.mode == s_cam_inside_cockpit || sx.cam.mode == s_cam_inside_no_cockpit)
   {
-    float off[3] = {0, 1.40f, 2.9f}; // front pilot's head
+    const float off[3] = {0, 1.40f, 2.9f}; // front pilot's head
     const float *pos = sx.world.entity[sx.world.player_entity].body.c;
     const quat_t *q = &sx.world.entity[sx.world.player_entity].body.q;
     quat_t tmp = *q; // look down a bit
@@ -148,7 +148,22 @@ void sx_world_move(const uint32_t dt_milli)
     quat_mul(&tmp, &right, &down);
     float wso[3] = {off[0], off[1], off[2]};
     quat_transform(q, wso); // convert object to world space
-    sx_camera_target(&sx.cam, pos, &down, wso, 0.9f);
+    sx_camera_target(&sx.cam, pos, &down, wso, 0.9f, 0.9f);
+  }
+  else if(sx.cam.mode == s_cam_left || sx.cam.mode == s_cam_right)
+  {
+    const float off[3] = {0, 1.40f, 2.9f}; // front pilot's head
+    const float *pos = sx.world.entity[sx.world.player_entity].body.c;
+    const quat_t *q = &sx.world.entity[sx.world.player_entity].body.q;
+    float wso[3] = {off[0], off[1], off[2]};
+    float target[3] = {
+      ((sx.cam.mode == s_cam_left) ? 1.0 : -1.0),
+      -0.2f, 0.15f};
+    quat_transform(q, wso); // convert object to world space
+    quat_transform(q, target);
+    for(int k=0;k<3;k++) target[k] += sx.cam.x[k];
+    sx_camera_target(&sx.cam, pos, q, wso, 0.9f, 0.03f);
+    sx_camera_lookat(&sx.cam, target, 0.9f, 0.03f);
   }
 
   sx_camera_move(&sx.cam, dt);
