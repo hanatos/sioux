@@ -957,12 +957,10 @@ int sx_vid_handle_input()
           sx.cam.mode = s_cam_inside_no_cockpit;
           break;
         case SDLK_F3:
-          sx.cam.hfov *= 1.1f;
-          sx.cam.vfov = sx.cam.hfov * sx.height/(float)sx.width;
+          sx.cam.mode = s_cam_left;
           break;
         case SDLK_F4:
-          sx.cam.hfov /= 1.1f;
-          sx.cam.vfov = sx.cam.hfov * sx.height/(float)sx.width;
+          sx.cam.mode = s_cam_right;
           break;
         case SDLK_F5:
           sx.cam.mode = s_cam_flyby;
@@ -971,10 +969,12 @@ int sx_vid_handle_input()
           sx.cam.mode = s_cam_homing;
           break;
         case SDLK_F7:
-          sx.cam.mode = s_cam_left;
+          sx.cam.hfov *= 1.1f;
+          sx.cam.vfov = sx.cam.hfov * sx.height/(float)sx.width;
           break;
         case SDLK_F8:
-          sx.cam.mode = s_cam_right;
+          sx.cam.hfov /= 1.1f;
+          sx.cam.vfov = sx.cam.hfov * sx.height/(float)sx.width;
           break;
         case SDLK_d: // down
           {
@@ -1079,10 +1079,18 @@ int sx_vid_handle_input()
           sx_heli_control_cyclic_z(sx.world.player_move, -event.jaxis.value/(float)0xffff);
           break;
         case 2:
-          sx_heli_control_collective(sx.world.player_move, .5f + event.jaxis.value/(float)0xffff);
+          {
+          // remap to avoid dead zone on retarded thrustmaster T.Flight Hotas X
+          float t = event.jaxis.value/(float)0x7fff;
+          if(t > 0) t *= 0.5f; // overdrive
+          sx_heli_control_collective(sx.world.player_move, 1.0f + t);
           break;
+          }
         case 3:
           sx_heli_control_tail(sx.world.player_move, event.jaxis.value/(float)0xffff);
+          break;
+        case 4:
+          sx.cam.angle_right = event.jaxis.value/(float)0x7fff;
           break;
       }
       break;
