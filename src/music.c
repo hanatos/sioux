@@ -35,13 +35,13 @@ void sx_music_cleaunp(sx_music_t *m)
   free(m);
 }
 
-int sx_music_play(sx_music_t *m)
+int sx_music_play(sx_music_t *m, int loops)
 {
   if(m != NULL)
   {
     if(Mix_PlayingMusic())
       Mix_HaltMusic();
-    if(Mix_PlayMusic(m->music, -1) == 0)
+    if(Mix_PlayMusic(m->music, loops) == 0)
     {
       fprintf(stderr, "[music] failed to play music file %s!\n", m->filename);
       fprintf(stderr, "[music] reason: %s\n", Mix_GetError());

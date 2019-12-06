@@ -11,6 +11,9 @@ int
 c3_mission_begin(
     c3_mission_t *mis)
 {
+  char filename[256];
+  c3_triggers_parse_music(filename, mis->music, C3_COND_PAD, 'f');
+  sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), 1);
   sx_sound_loop(sx.assets.sound+mis->snd_engine, -1, 1000);
   uint32_t objectid = 0;
   uint32_t startposid = 0;
@@ -121,6 +124,12 @@ void
 c3_mission_pump_events(
     c3_mission_t *mis)
 {
+  char filename[32];
+  if(!Mix_PlayingMusic())
+  {
+    c3_triggers_parse_music(filename, mis->music, C3_COND_FLIGHT, 'f');
+    sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), -1);
+  }
   const float *player_pos = sx.world.entity[sx.world.player_entity].body.c;
   float wp[] = {
     sx.mission.waypoint[0][sx.world.player_wp][0] - player_pos[0],

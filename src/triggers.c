@@ -176,17 +176,12 @@ c3_triggers_action(
       triggers_printf(stderr, "action play sound %u\n", arg0);
       if(arg0 < 0 || arg0 > sx.assets.num_sounds) return;
       sx_sound_play(sx.assets.sound+arg0);
-      if(!Mix_PlayingMusic())
-      {
-	      c3_triggers_parse_music(filename, mis->music, C3_COND_FLIGHT, 'f');
-	      sx_music_play(sx_assets_filename_to_music(&sx.assets, filename));
-      }
       break;
     case C3_ACT_VAPORIZE:     // vaporize, <object> ???
       break;
     case C3_ACT_WIN:          // mission won
       c3_triggers_parse_music(filename, mis->music, C3_COND_WIN, 'f');
-      sx_music_play(sx_assets_filename_to_music(&sx.assets, filename));
+      sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), -1);
       break;
     case C3_ACT_CLEARCOUNTER: // restart from 1
       triggers_printf(stderr, "resetting counter\n");
@@ -319,26 +314,26 @@ c3_triggers_check(
 
 char* c3_triggers_parse_music(char* filename, char letter, int gamestate, char fg)
 {
-       int i = 0;
+  int i = 0;
 
-       memset(filename, '\0', strlen(filename));
+  memset(filename, '\0', strlen(filename));
 
-       fg = tolower(fg);
+  fg = tolower(fg);
 
-       if(isalpha(fg) != 0 && ( fg == 'f' || fg == 'g' ))
-         filename[i++] = fg;
+  if(isalpha(fg) != 0 && ( fg == 'f' || fg == 'g' ))
+    filename[i++] = fg;
 
-       if(isalpha(letter) != 0)
-         filename[i++] = tolower(letter);
-       else if(isdigit(letter) != 0 && letter != 0)
-         filename[i++] = 'n';
+  if(isalpha(letter) != 0)
+    filename[i++] = tolower(letter);
+  else if(isdigit(letter) != 0 && letter != 0)
+    filename[i++] = 'n';
 
-       if(isalpha(letter) != 0 && (gamestate == C3_COND_WIN || gamestate == C3_COND_LOSE))
-	       gamestate = C3_COND_LOSE_WIN;
+  if(isalpha(letter) != 0 && (gamestate == C3_COND_WIN || gamestate == C3_COND_LOSE))
+    gamestate = C3_COND_LOSE_WIN;
 
-       strncpy(&filename[i], c3_condition_midi_text[gamestate], 11);
+  strncpy(&filename[i], c3_condition_midi_text[gamestate], 11);
 
-       return filename;
+  return filename;
 }
 
 

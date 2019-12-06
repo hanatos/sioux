@@ -16,5 +16,5 @@ int sx_music_init(sx_music_t *m, const char *filename);
 
 void sx_music_cleaunp(sx_music_t *m);
 
-int sx_music_play(sx_music_t *m);
+int sx_music_play(sx_music_t *m, int loops);
 

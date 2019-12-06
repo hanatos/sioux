@@ -32,7 +32,8 @@ typedef enum c3_condition_midi_t
 }
 c3_condition_midi_t;
 
-
+// the clean way would probably be to define non-static
+// and provide the linkage in the c file. too lazy.
 __attribute__ ((unused))
 static const char *c3_condition_midi_text[] =
 {
