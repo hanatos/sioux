@@ -40,6 +40,9 @@ typedef struct sx_world_t
   uint32_t num_entities;
   sx_entity_t entity[1024];
 
+  // pool for dynamically spawned entities:
+  uint32_t num_dyn_entities;
+
   int32_t terrain_wd, terrain_ht, terrain_bpp;
   uint8_t *terrain; // TODO: make 16 bit?
   float terrain_low, terrain_high, cloud_height;
@@ -56,6 +59,9 @@ typedef struct sx_world_t
 }
 sx_world_t;
 
+void sx_world_init();
+void sx_world_cleanup();
+
 // collision detection and interaction between objects
 void sx_world_move(const uint32_t dt);
 
@@ -65,11 +71,13 @@ int sx_world_init_terrain(const char *filename,
 
 void sx_world_render_entity(uint32_t ei);
 
+void sx_world_remove_entity(uint32_t ei);
+
 // TODO: probably needs /a lot/ of amending
 uint32_t sx_world_add_entity(
     uint32_t objectid,
     float *pos, quat_t *q,
-    char id, uint8_t camp);
+    char id, uint8_t camp, uint32_t ground);
 
 float sx_world_get_height(const float *p);
 void  sx_world_get_normal(const float *p, float *n);

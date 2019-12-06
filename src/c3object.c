@@ -6,7 +6,7 @@ uint32_t c3_object_load(sx_object_t *o, const char *filename)
 {
   // load .ai file
   memset(o, 0, sizeof(sx_object_t));
-  strncpy(o->filename, filename, sizeof(o->filename));
+  strncpy(o->filename, filename, sizeof(o->filename)-1);
   char file[256];
   snprintf(file, sizeof(file), "%s.ai", filename);
 
@@ -67,7 +67,7 @@ uint32_t c3_object_load(sx_object_t *o, const char *filename)
   sscanf(line, "%4[^,],%d", o->dral, &o->geo_l);
   // read movement
   if(file_readline(f, line)) return 1;
-  strncpy(o->move, line, 4);
+  memcpy(o->move, line, 4);
   // <
   // read extra flags, hitpoints, printable name for radar?
   // <

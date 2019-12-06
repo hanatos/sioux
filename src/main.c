@@ -30,13 +30,13 @@ int main(int argc, char *argv[])
   while(1)
   {
     sx_vid_render_frame();
-    if(sx_vid_handle_input()) break;
-    // TODO:
-    // sx_ai_think();
 
     uint32_t end = SDL_GetTicks();
     while(sim_time < end)
     {
+      if(sx_vid_handle_input()) goto out;
+      // TODO:
+      // sx_ai_think();
       sx_world_move(delta_sim_time);//end - sx.time);
       sim_time += delta_sim_time;
     }
@@ -52,6 +52,7 @@ int main(int argc, char *argv[])
     }
     sx.time = end;
   }
+out:
   sx_vid_end_mission();
   c3_mission_end(&sx.mission);
   sx_cleanup(); // alse cleans vid

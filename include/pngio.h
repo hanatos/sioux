@@ -61,7 +61,7 @@ png_write(
 
   png_init_io(png_ptr, f);
 
-  int compression = 7;
+  int compression = 1;
 
   png_set_compression_level(png_ptr, compression);
   png_set_compression_mem_level(png_ptr, 8);

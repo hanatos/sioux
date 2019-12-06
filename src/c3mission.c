@@ -61,7 +61,7 @@ c3_mission_begin(
     // read orientation
     const float heading = 2.0f*M_PI*f[i].heading/(float)0xffff;
     quat_from_euler(&q, 0, 0, heading);
-    uint32_t eid = sx_world_add_entity(objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i));
+    uint32_t eid = sx_world_add_entity(objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i), 1);
 #if 0 // XXX DEBUG
     if(strcmp(sx.assets.object[objectid].filename, "oak4"))
     {
@@ -89,7 +89,7 @@ c3_mission_begin(
   q = sx.world.entity[startposid].body.q;
   // add player entity and attach camera and movement controller:
   uint32_t eid = sx_world_add_entity(player_objectid, pos, &q,
-      sx.world.entity[startposid].id, sx.world.entity[startposid].camp);
+      sx.world.entity[startposid].id, sx.world.entity[startposid].camp, 1);
 
   // setup start position:
   sx_camera_init(&sx.cam);
@@ -110,6 +110,8 @@ c3_mission_begin(
   sx.world.entity[eid].move.damage = &sx_heli_damage; // TODO: pending API updates
 
   free(orig);
+
+  // setup dynamic entities
   return 0;
 }
 

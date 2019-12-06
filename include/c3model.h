@@ -304,7 +304,7 @@ c3m_dump_obj(c3m_header_t *h, const char *filename)
   }
 
   char mtlname[1024];
-  strncpy(mtlname, filename, sizeof(mtlname));
+  strncpy(mtlname, filename, sizeof(mtlname)-1);
   char *c = mtlname+strlen(mtlname);
   while(*c != '.' && c > mtlname) c--;
   *c++ = '.'; *c++ = 'm'; *c++ = 't'; *c++ = 'l'; *c++ = 0;

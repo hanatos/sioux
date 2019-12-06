@@ -53,6 +53,7 @@ int main(int argc, char *argv[])
   // maybe the player.ai file and the comb_l.3do contain
   // offsets how to align these objects? at least it does
   // have exactly 23 normals.. hokum and apache don't seem to have it though.
+  // (i think _l is just the lowres model)
 
 
 #if 1 // DEBUG see material data

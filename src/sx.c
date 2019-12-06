@@ -1,11 +1,14 @@
 #include "sx.h"
 #include "vid.h"
 
+#include <string.h>
+
 sx_t sx; // linkage
 
 int
 sx_init()
 {
+  memset(&sx, 0, sizeof(sx));
   sx.width = 1280;
   sx.height = 640;
   sx.width = 1920;
@@ -17,7 +20,7 @@ sx_init()
   sx.audio_spec.freq = 11025;
   sx.audio_spec.format = AUDIO_U8;
   sx.audio_spec.channels = 1;
-  sx.audio_spec.samples = 4096; // buffer size
+  sx.audio_spec.samples = 128;//4096; // buffer size
   sx.audio_spec.callback = 0;
   sx.audio_dev = Mix_OpenAudio(sx.audio_spec.freq, sx.audio_spec.format, sx.audio_spec.channels, sx.audio_spec.samples);
   if ( Mix_AllocateChannels(8) < 0)

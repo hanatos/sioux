@@ -10,6 +10,14 @@
 
 // TODO: interface to add an object? triggered by .pos loading?
 
+void sx_world_init()
+{
+}
+
+void sx_world_cleanup()
+{
+}
+
 // apply one step of runge-kutta 4 integration
 // to the equations of movement of the given entity
 static void
@@ -256,12 +264,24 @@ sx_world_get_normal(const float *p, float *n)
 
 }
 
-// TODO: pass flag to ground it on surface?
+void
+sx_world_remove_entity(
+    uint32_t eid)
+{
+  sx.world.num_entities--;
+  sx_entity_t tmp = sx.world.entity[eid];
+  sx.world.entity[eid] = sx.world.entity[sx.world.num_entities];
+  sx.world.entity[sx.world.num_entities] = tmp;
+}
+
 uint32_t
 sx_world_add_entity(
-    uint32_t objectid,
-    float *p, quat_t *q,
-    char id, uint8_t camp)
+    uint32_t objectid,   // 3d model to link to
+    float *p,            // position
+    quat_t *q,           // orientation
+    char id,             // mission relevant id
+    uint8_t camp,        // good guy, bad guy, neutral
+    uint32_t ground)     // should i ground this object or let it float?
 {
   if(sx.world.num_entities >= sizeof(sx.world.entity)/sizeof(sx.world.entity[0]))
     return -1;
@@ -274,8 +294,11 @@ sx_world_add_entity(
   sx.world.entity[eid].camp = camp;
   // offset by bounding box of object (found in header).
   // note that the objects have a z-up system:
-  const float *aabb = sx.assets.object[objectid].aabb;
-  p[1] = sx_world_get_height(p) - aabb[2];
+  if(ground)
+  {
+    const float *aabb = sx.assets.object[objectid].aabb;
+    p[1] = sx_world_get_height(p) - aabb[2];
+  }
   // works almost for most objects. the sub-geo have often times not been transformed to their final
   // locations. also for instance scud are still floating.
   // because, as it turns out: there's a stray triangle way underneath it,
@@ -292,10 +315,7 @@ sx_world_add_entity(
 
   // derived quantities:
   // TODO: this the good bounding box?
-  aabb = sx.assets.object[objectid].geo_aabb[0]; // just the body
-  // float w = aabb[3]-aabb[0], h = aabb[5]-aabb[2], l = aabb[3]-aabb[1];
-  // TODO: note that these lengths are in dm, not m!
-  // w *= 0.1f; h *= 0.1f; l *= 0.1f;
+  // const float *aabb = sx.assets.object[objectid].geo_aabb[0]; // just the body
   const float w = 2.0f, l = 2.0f, h = 3.0f; // [m]
 
   // fprintf(stderr, "%s aabb w h l %g x %g x %g m\n",
@@ -308,8 +328,6 @@ sx_world_add_entity(
   //                |-xz         -yz          y^2 + x^2 |
   const float mass = rho * w * h * l;
   sx.world.entity[eid].body.m = mass;
-  // XXX may need to reconsider the integration along z, since we want
-  // XXX our center of mass closer to the front, under the main rotor.
   sx.world.entity[eid].body.invI[0] = 3.0f/8.0f / (rho * w * (h * l*l*l + l * h*h*h));
   sx.world.entity[eid].body.invI[4] = 3.0f/8.0f / (rho * h * (w * l*l*l + l * w*w*w));
   sx.world.entity[eid].body.invI[8] = 3.0f/8.0f / (rho * l * (w * h*h*h + h * w*w*w));

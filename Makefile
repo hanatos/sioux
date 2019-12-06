@@ -1,7 +1,7 @@
 CC?=gcc
 CFLAGS=-Wall -std=c11
 CFLAGS+=-Iinclude -I.
-CFLAGS+=-g -ggdb3
+CFLAGS+=-g -O3 -march=native
 LDFLAGS=-lm
 
 LDFLAGS+=$(shell pkg-config --libs libpng)
@@ -14,6 +14,9 @@ all: pcx model anim sx
 
 sanitize: CFLAGS+=-fno-omit-frame-pointer -fsanitize=address
 sanitize: all
+
+debug: CFLAGS+=-ggdb3 -O0
+debug: all
 
 # TODO: separate into useful subdirs?
 HEADERS=include/assets.h\

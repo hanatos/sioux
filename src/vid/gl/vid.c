@@ -1148,8 +1148,8 @@ int sx_vid_handle_input()
       case SDL_JOYBUTTONDOWN:
       switch(event.jbutton.button)
       {
-        case 0: // pretend we have a cannon. man this has lag!
-          sx_sound_loop(sx.assets.sound+sx.mission.snd_cannon, -1, 5);
+        case 0: // pretend we have a cannon:
+          sx_sound_play(sx.assets.sound+sx.mission.snd_cannon);
           break;
         case 3:
           sx_heli_control_tail(sx.world.player_move, -1);

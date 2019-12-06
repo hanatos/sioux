@@ -76,7 +76,8 @@ int main(int argc, char *argv[])
     // loads in gimp, fails in imagemagick. stole code from gimp:
     uint8_t *px = 0;
     uint32_t wd, ht;
-    pcx_load(argv[1], &wd, &ht, &px, alphahack);
+    if(pcx_load(argv[1], &wd, &ht, &px, alphahack))
+      exit(1);
     png_write(outname, wd, ht, px, 8);
     free(px);
     exit(0);
