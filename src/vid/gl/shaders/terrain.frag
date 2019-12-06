@@ -354,9 +354,9 @@ raymarch_terrain(
     out vec3 pos, // output position
     out vec4 L_s) // in-scattered light
 {
-#if 0 // simple plane intersection
+#if 1 // simple plane intersection
   {
-  float t = -(ro.y - u_terrain_bounds.x)/rd.y;
+  float t = -(ro.y - u_terrain_bounds.x + 100)/rd.y;
   if(t < tmin || t > tmax) t = -1;
   return t;
   }
@@ -462,7 +462,7 @@ vec4 render_terrain(
 
 
   float t = -1;
-  if(false)//tex_coord.x > 0.5)
+  if(true)//tex_coord.x > 0.5)
     t = raymarch_terrain(
         ro, rd, tmin, tmax, rand, pos, L_s);
   else 
@@ -474,7 +474,7 @@ vec4 render_terrain(
   if(t > 0.0)
   { // ground
     vec2 tc = k_terrain_scale*vec2(-pos.x, -pos.z);
-    col = texture(terrain_col, tc).rgb;
+    col = vec3(1);// XXX texture(terrain_col, tc).rgb;
     vec3 nor = vec3(0, 1, 0);
 
     if(t < 150)
@@ -574,7 +574,8 @@ void main()
   //------------------------------------------------
   // backdrop: terrain with trees and water, sky
   //------------------------------------------------
-  terrain_sample = render_terrain(u_pos, w, bounds.x, bounds.y, rand, godrays_sample);
+  // terrain_sample = render_terrain(u_pos, w, bounds.x, bounds.y, rand, godrays_sample);
+  terrain_sample = vec4(renderSky(u_pos, w), bounds.y);
 
   //------------------------------------------------
   // raster geo sample

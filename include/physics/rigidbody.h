@@ -58,12 +58,10 @@ static inline void sx_rigid_body_apply_force(
   for(int k=0;k<3;k++) b->force[k] += act->f[k];
 
 #if 1
-  float v0[3] = {0, 0, 2}, v1[3] = {0, 0, 10};
+  float v0[3], v1[3];
   for(int k=0;k<3;k++) v0[k] = act->r[k];
   for(int k=0;k<3;k++) v1[k] = act->r[k] + act->f[k];
-  float w0[3] = {-v0[0], -v0[2], v0[1]};
-  float w1[3] = {-v1[0], -v1[2], v1[1]};
-  sx_vid_add_debug_line(w0, w1);
+  sx_vid_add_debug_line(v0, v1);
 #endif
 
   float fw[3]; // torque or angular force
@@ -86,9 +84,9 @@ static inline void sx_rigid_body_recalculate(
   // compute angular velocity b->w in world space
   float R[9], tmp[3], tmp2[3];
   quat_to_mat3(&b->q, R);
-  mat3_mulv (R, b->pw, tmp);
+  mat3_tmulv(R, b->pw, tmp);
   mat3_mulv (b->invI, tmp, tmp2);
-  mat3_tmulv(R, tmp2, b->w);
+  mat3_mulv (R, tmp2, b->w);
 
   // spin = dt * 0.5 * w * q;
   quat_t wq;

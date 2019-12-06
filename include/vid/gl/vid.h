@@ -42,7 +42,7 @@ typedef struct sx_vid_t
   uint32_t program_blit_texture, program_draw_texture,
            program_taa, vao_empty, program_grade, program_hero,
            program_draw_hud, program_hud_text,
-           program_debug_line;
+           program_debug_line, program_terrain;
 
   uint32_t vao_hud, vbo_hud;
   sx_hud_t hud;
@@ -57,11 +57,17 @@ typedef struct sx_vid_t
   float debug_line_vx[2000];
   uint32_t vao_debug_line, vbo_debug_line;
 
+  uint32_t vao_terrain, vbo_terrain[2];
+  uint32_t terrain_vx_cnt, terrain_idx_cnt;
+  uint32_t *terrain_idx;
+  float    *terrain_vx;
+
   fbo_t *fbo0, *fbo1; // ping pong fbos for taa
   fbo_t *fbo;         // current pointer
   fbo_t *raster;      // rasterised geo, unwarped
   fbo_t *fsb;         // full screen buffer for terrain and comp
   fbo_t *cube[4];     // cubemap for rasterised geo
+  uint32_t cube_side; // what are we currently rendering
 
   uint32_t num_geo;
   sx_geo_t geo[2048];

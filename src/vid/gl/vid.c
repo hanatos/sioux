@@ -5,6 +5,8 @@
 #include "file.h"
 #include "pngio.h"
 #include "physics/heli.h"
+#include "terrain.h"
+#include "matrix4.h"
 
 static unsigned int
 compile_src(const char *src, int type)
@@ -55,14 +57,25 @@ compile_compute_shader(const char *src)
 
 
 static unsigned int
-compile_shader(const char *src_vertex, const char *src_fragment)
+compile_shader(
+    const char *src_vertex,
+    const char *src_fragment,
+    const char *src_tcs,
+    const char *src_tes,
+    const char *src_geo)
 {
   GLuint prog = glCreateProgram();
 
-  unsigned int vert = 0, frag = 0;
+  unsigned int vert = 0, frag = 0, tcs = 0, tes = 0, geo = 0;
 
   glAttachShader(prog, vert = compile_src(src_vertex, GL_VERTEX_SHADER));
   glAttachShader(prog, frag = compile_src(src_fragment, GL_FRAGMENT_SHADER));
+  if(src_tcs)
+    glAttachShader(prog, tcs = compile_src(src_tcs, GL_TESS_CONTROL_SHADER));
+  if(src_tes)
+    glAttachShader(prog, tes = compile_src(src_tes, GL_TESS_EVALUATION_SHADER));
+  if(src_geo)
+    glAttachShader(prog, geo = compile_src(src_geo, GL_GEOMETRY_SHADER));
   glLinkProgram(prog);
 
   int success;
@@ -76,6 +89,9 @@ compile_shader(const char *src_vertex, const char *src_fragment)
 
   glDeleteShader(vert);
   glDeleteShader(frag);
+  if(tcs) glDeleteShader(tcs);
+  if(tes) glDeleteShader(tes);
+  if(geo) glDeleteShader(geo);
 
   return prog;
 }
@@ -90,7 +106,26 @@ recompile()
   assert(vert_shader);\
   assert(frag_shader);\
   sx.vid.program_##prog = compile_shader(\
-      vert_shader, frag_shader);\
+      vert_shader, frag_shader, 0, 0, 0);\
+  free(vert_shader);\
+  free(frag_shader); } while(0)
+#define CCC(prog, vert, frag, tcs, tes, geo)\
+  do {\
+  char *vert_shader = file_load("src/vid/gl/shaders/"vert".vert", 0);\
+  char *frag_shader = file_load("src/vid/gl/shaders/"frag".frag", 0);\
+  char *ttcs_shader = file_load("src/vid/gl/shaders/"tcs".tcs", 0);\
+  char *ttes_shader = file_load("src/vid/gl/shaders/"tes".tes", 0);\
+  char *geom_shader = file_load("src/vid/gl/shaders/"geo".geo", 0);\
+  assert(vert_shader);\
+  assert(frag_shader);\
+  assert(ttcs_shader);\
+  assert(ttes_shader);\
+  assert(geom_shader);\
+  sx.vid.program_##prog = compile_shader(\
+      vert_shader, frag_shader, ttcs_shader, ttes_shader, geom_shader);\
+  free(geom_shader);\
+  free(ttcs_shader);\
+  free(ttes_shader);\
   free(vert_shader);\
   free(frag_shader); } while(0)
 
@@ -103,6 +138,9 @@ recompile()
   CC(grade, "fstri", "hud_horizon");
   CC(hero, "hero", "hero");
   CC(debug_line, "hero", "line");
+  CCC(terrain, "ground", "ground", "ground", "ground", "ground");
+#undef CC
+#undef CCC
 }
 
 static void
@@ -236,6 +274,25 @@ int sx_vid_init(
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
   glEnableVertexArrayAttrib(sx.vid.vao_debug_line, 0);
   glBindAttribLocation(sx.vid.program_debug_line, 0, "position");
+
+  // tessellated terrain for rasterisation:
+  sx_vid_gl_terrain_init(
+      &sx.vid.terrain_vx,
+      &sx.vid.terrain_idx,
+      &sx.vid.terrain_vx_cnt,
+      &sx.vid.terrain_idx_cnt);
+
+  glGenVertexArrays(1, &sx.vid.vao_terrain);
+  glBindVertexArray(sx.vid.vao_terrain);
+  glGenBuffers(2, sx.vid.vbo_terrain);
+  glBindBuffer(GL_ARRAY_BUFFER, sx.vid.vbo_terrain[0]);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(float)*3*sx.vid.terrain_vx_cnt, sx.vid.terrain_vx, GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+  glEnableVertexArrayAttrib(sx.vid.vao_terrain, 0);
+  glBindAttribLocation(sx.vid.program_terrain, 0, "position");
+  // index buffer
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sx.vid.vbo_terrain[1]);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*sx.vid.terrain_idx_cnt*3, sx.vid.terrain_idx, GL_STATIC_DRAW);
 
   // heads up display:
   glGenVertexArrays(1, &sx.vid.vao_hud);
@@ -516,7 +573,7 @@ int sx_vid_init_terrain(
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     // if(k == 1 || k == 4 || k == 0 || k == 3)
-    if(k == 0 || k == 3) // colour buffers
+    if(1)//if(k == 0 || k == 3) // colour buffers
     {
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -650,13 +707,111 @@ uint32_t sx_vid_init_image(const char *filename, uint32_t *texid)
   return cnt;
 }
 
+
+// compute model view projection matrix as
+// MVP = P * R * F * V * M * C3M
+// where
+// C3M: comanche 3 model space to our local space flip axes
+// M  : model matrix to world space
+// V  : to camera space
+// F  : flip axes for opengl such that -z inside screen
+// R  : rotate to left and right cube sides if rendering fisheye
+// P  : projection matrix
+static inline void
+compute_mvp(
+    float        *MVP,
+    float        *MV,
+    const int     u_cube_side,
+    const quat_t *q_model,
+    const float  *p_model,
+    sx_camera_t  *cam,
+    int c3model)
+{
+  // C3M
+  // if c3 model coordinates, need to flip to our local model coordinates as
+  // used for physics:
+  float C3M[16] = {
+    -1,  0, 0, 0,
+     0,  0, 1, 0,
+     0, -1, 0, 0,
+     0,  0, 0, 1,
+  };
+  if(!c3model) mat4_set_identity(C3M);
+
+  // M: model to world space. need quaternion and world space position of
+  // model.
+  float mat3[9], M[16];
+  quat_to_mat3(q_model, mat3);
+  mat4_from_mat3(M, mat3, p_model);
+
+  // V: world to view space
+#if 0
+  float T[16] = {0.0f}, Q[16], V[16];
+  quat_t vq = cam->q;
+  quat_conj(&vq);
+  quat_to_mat3(&vq, mat3);
+  mat4_from_mat3(Q, mat3, 0);
+  mat4_set_identity(T);
+  T[ 3] = -cam->x[0];
+  T[ 7] = -cam->x[1];
+  T[11] = -cam->x[2];
+  mat4_mul(Q, T, V);
+#else
+  float c_pos[3] = {-cam->x[0], -cam->x[1], -cam->x[2]};
+  quat_t vq = cam->q;
+  quat_conj(&vq);
+  quat_transform(&vq, c_pos);
+
+  float V[16];
+  quat_to_mat3(&vq, mat3);
+  mat4_from_mat3(V, mat3, c_pos);
+#endif
+
+  float F[16] = {
+    -1, 0,  0, 0,
+     0, 1,  0, 0,
+     0, 0, -1, 0,
+     0, 0,  0, 1};
+  // now coord system is:
+  // x-right, y-up, z-out of screen (negative z into it, right handed)
+
+  // need to rotate left or right just enough to cover half the total field of view:
+  // looks correct when assuming +z forward, +x right:
+  const float s = sin(cam->hfov*0.25) * (u_cube_side == 0 ? 1.0 : -1.0);
+  const float c = cos(cam->hfov*0.25);
+  float R[] = {
+    c, 0, -s, 0,
+    0, 1,  0, 0,
+    s, 0,  c, 0,
+    0, 0,  0, 1};
+
+  // now scale to accomodate field of view:
+  const float n = .10, f = 10000.0;
+  const float r = n*fabsf(s/c), l = -r;
+  // need some leeway to not cut off corners:
+  const float t = 1.38 * n*tan(cam->vfov*0.5), b = -t;
+  float P[] = {
+    2*n/(r-l), 0, (r+l)/(r-l), 0,
+    0, 2*n/(t-b), (t+b)/(t-b), 0,
+    0, 0,        -(f+n)/(f-n), -2*f*n/(f-n),
+    0, 0,                  -1, 0};
+
+  // MVP = P * R * F * V * M * C3M
+  float tmp[16];
+  mat4_mul(M, C3M, tmp); // M * C3
+  mat4_mul(V, tmp, M);   // V * MC3
+  mat4_mul(F, M, tmp);   // F * VMC3
+  mat4_mul(R, tmp, MV);  // MV  = R * FVMC3
+  mat4_mul(P, MV, MVP);  // MVP = P * RFVMC3
+}
+
 void
 sx_vid_render_geo(
     const uint32_t gi,
-    const float  *omvx,
-    const quat_t  omvq,
-    const float  *mvx,
-    const quat_t  mvq)
+    const float  *omp,
+    const quat_t *omq,
+    const float  *mp,
+    const quat_t *mq)
 {
   if(gi < 0 || gi >= sx.vid.num_geo) return;
   sx_geo_t *g = sx.vid.geo + gi;
@@ -665,14 +820,10 @@ sx_vid_render_geo(
   uint32_t program = sx.vid.program_hero;
 
   // specific to this geo/entity
-  glUniform3f(glGetUniformLocation(program, "u_old_pos"),
-      omvx[0], omvx[1], omvx[2]);
-  glUniform4f(glGetUniformLocation(program, "u_old_q"),
-      omvq.x[0], omvq.x[1], omvq.x[2], omvq.w);
-  glUniform3f(glGetUniformLocation(program, "u_pos"),
-      mvx[0], mvx[1], mvx[2]);
-  glUniform4f(glGetUniformLocation(program, "u_q"),
-      mvq.x[0], mvq.x[1], mvq.x[2], mvq.w);
+  float MVP[16], MV[16];
+  compute_mvp(MVP, MV, sx.vid.cube_side, mq, mp, &sx.cam, 1);
+  glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
+  glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
   // bind textures from geo material with given index
   int tu = 0;
@@ -711,6 +862,7 @@ void sx_vid_render_frame()
     // turns out we only need L and R cube sides
     for(int k=0;k<2;k++)
     {
+      sx.vid.cube_side = k;
       fbo_bind(sx.vid.cube[k]);
       glClearColor(0, 0, 0, 0);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -720,16 +872,50 @@ void sx_vid_render_frame()
       // glBlendFunc(GL_ONE, GL_ONE);
       // glBlendFunc(GL_ZERO, GL_SRC_COLOR);
 
+      // render terrain first and hope for early z out?
+      // XXX DEBUG draw tessellated terrain
+      if(sx.vid.program_terrain != -1)
+      {
+        uint32_t program = sx.vid.program_terrain;
+        glUseProgram(program);
+        glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
+        glUniform2f(glGetUniformLocation(program, "u_res"),
+            sx.vid.cube[k]->width, sx.vid.cube[k]->height);
+        glUniform1i(glGetUniformLocation(program, "u_frame"), sx.time);
+        glUniform3f(glGetUniformLocation(program, "u_pos_ws"),
+            sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
+        glUniform2f(glGetUniformLocation(program, "u_terrain_bounds"),
+            sx.world.terrain_low, sx.world.terrain_high);
+
+        // terrain comes in world space but centered at camera position
+        float MVP[16], MV[16];
+        quat_t mq;
+        quat_init_angle(&mq, 0, 1, 0, 0);
+        float mp[] = {sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]};
+        compute_mvp(MVP, MV, k, &mq, mp, &sx.cam, 0);
+        glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
+        glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
+
+        // bind terrain textures:
+        glBindTextureUnit( 1, sx.vid.tex_terrain[0]); // colour
+        glBindTextureUnit( 2, sx.vid.tex_terrain[1]); // displacement
+        glBindTextureUnit( 3, sx.vid.tex_terrain[2]); // detail
+        glBindTextureUnit( 4, sx.vid.tex_terrain[3]); // char colour
+        glBindTextureUnit( 5, sx.vid.tex_terrain[4]); // char height
+        glBindTextureUnit( 6, sx.vid.tex_terrain[5]); // char material
+        glBindTextureUnit( 7, sx.vid.tex_terrain[6]); // displacement accel
+        glBindTextureUnit( 8, sx.vid.tex_terrain[7]); // char dis accel
+        glBindVertexArray(sx.vid.vao_terrain);
+        glDrawElements(GL_PATCHES, sx.vid.terrain_idx_cnt*3, GL_UNSIGNED_INT, 0);
+      }
+
       uint32_t program = sx.vid.program_hero;
       glUseProgram(program);
 
       // global uniforms:
-      glUniform1i(glGetUniformLocation(program, "u_cube_side"), k);
       // XXX mission -> world?
       // glUniform3f(glGetUniformLocation(program, "u_sun"), sunv[0], sunv[1], sunv[2]);
       glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
-      glUniform1f(glGetUniformLocation(program, "u_hfov"), sx.cam.hfov);
-      glUniform1f(glGetUniformLocation(program, "u_vfov"), sx.cam.vfov);
       glUniform2f(glGetUniformLocation(program, "u_res"),
           sx.vid.cube[k]->width, sx.vid.cube[k]->height);
       glUniform1i(glGetUniformLocation(program, "u_frame"), sx.time);
@@ -747,8 +933,6 @@ void sx_vid_render_frame()
         glUseProgram(program);
         glUniform1i(glGetUniformLocation(program, "u_cube_side"), k);
         glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
-        glUniform1f(glGetUniformLocation(program, "u_hfov"), sx.cam.hfov);
-        glUniform1f(glGetUniformLocation(program, "u_vfov"), sx.cam.vfov);
         glUniform2f(glGetUniformLocation(program, "u_res"),
             sx.vid.cube[k]->width, sx.vid.cube[k]->height);
         glUniform1i(glGetUniformLocation(program, "u_frame"), sx.time);
@@ -756,23 +940,15 @@ void sx_vid_render_frame()
             sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
 
         // we have lines almost directly in world space
+        float MVP[16], MV[16];
+        quat_t mq;
+        quat_init_angle(&mq, 0, 1, 0, 0);
         sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
-        float mvx[3] = {
-          ent->body.c[0]-sx.cam.x[0],
-          ent->body.c[1]-sx.cam.x[1],
-          ent->body.c[2]-sx.cam.x[2]};
-        quat_t mvq = sx.cam.q;
-        quat_conj(&mvq);
-        quat_transform(&mvq, mvx);
+        float mp[] = {ent->body.c[0], ent->body.c[1], ent->body.c[2]};
+        compute_mvp(MVP, MV, k, &mq, mp, &sx.cam, 0);
+        glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
+        glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
-        glUniform3f(glGetUniformLocation(program, "u_old_pos"),
-            mvx[0], mvx[1], mvx[2]);
-        glUniform4f(glGetUniformLocation(program, "u_old_q"),
-            mvq.x[0], mvq.x[1], mvq.x[2], mvq.w);
-        glUniform3f(glGetUniformLocation(program, "u_pos"),
-            mvx[0], mvx[1], mvx[2]);
-        glUniform4f(glGetUniformLocation(program, "u_q"),
-            mvq.x[0], mvq.x[1], mvq.x[2], mvq.w);
         glLineWidth(1.5f*sx.width/1024.0f);
         glNamedBufferSubData(sx.vid.vbo_debug_line, 0, sizeof(sx.vid.debug_line_vx), sx.vid.debug_line_vx);
         glBindVertexArray(sx.vid.vao_debug_line);

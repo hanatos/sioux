@@ -54,7 +54,7 @@ SX_FILES=src/sx.c\
          src/world.c
 
 # opengl vid module:
-HEADERS+=include/vid/gl/vid.h
+HEADERS+=include/vid/gl/vid.h src/vid/gl/terrain.h
 SX_FILES+= src/vid/gl/vid.c
 
 pcx: tools/pcx.c Makefile include/decompress.h include/file.h include/pngio.h include/pcxread.h

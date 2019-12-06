@@ -5,13 +5,8 @@ layout (location = 1) in vec3 normal;
 layout (location = 2) in vec3 uvs;  // super wacky integer in 3rd channel..
 
 uniform float u_time;
-uniform float u_hfov;
-uniform float u_vfov;
-uniform vec3 u_pos;
-uniform vec4 u_q;
-uniform vec3 u_old_pos;
-uniform vec4 u_old_q;
-uniform int u_cube_side;
+uniform mat4 u_mvp;
+uniform mat4 u_mv;
 uniform vec2 u_res;
 uniform int u_frame;
 
@@ -25,44 +20,19 @@ float hash1( float n )
   return fract( n*17.0*fract( n*0.3183099 ) );
 }
 
-vec4 quat_inv(vec4 q)
-{ 
-  return vec4(-q.x, -q.y, -q.z, q.w); 
-}
-
-vec4 quat_mul(vec4 q1, vec4 q2)
-{ 
-  vec4 qr;
-  qr.x = (q1.w * q2.x) + (q1.x * q2.w) + (q1.y * q2.z) - (q1.z * q2.y);
-  qr.y = (q1.w * q2.y) - (q1.x * q2.z) + (q1.y * q2.w) + (q1.z * q2.x);
-  qr.z = (q1.w * q2.z) + (q1.x * q2.y) - (q1.y * q2.x) + (q1.z * q2.w);
-  qr.w = (q1.w * q2.w) - (q1.x * q2.x) - (q1.y * q2.y) - (q1.z * q2.z);
-  return qr;
-}
-
-vec3 quat_transform(vec3 position, vec4 qr)
-{ 
-  vec4 qr_inv = quat_inv(qr);
-  vec4 q_pos = vec4(position.x, position.y, position.z, 0);
-
-  vec4 q_tmp = quat_mul(qr, q_pos);
-  qr = quat_mul(q_tmp, qr_inv);
-
-  return vec3(qr.x, qr.y, qr.z);
-}
-// found this on opengl.org: (seems to do the reverse transform)
-vec3 quat_transform_inv(vec3 v, vec4 q)
-{ 
-  return v + 2.0*cross(cross(v, q.xyz ) + q.w*v, q.xyz);
-}
-
 void main()
 {
   vec3 v, ov;
 
   // transform model to view:
   // flip axes to reflect: x right, y back, z up on the input model
-  vec3 p = position; // input model coordinates
+  // position; // input model coordinates
+  gl_Position = u_mvp * vec4(position, 1);
+  old_pos4 = u_mvp * vec4(position, 1); // XXX TODO: bring back old positions for taa
+  tex_uv = uvs;
+  position_cs    = vec3(u_mv * vec4(position, 1));
+  shading_normal = vec3(u_mv * vec4(normal, 0));
+#if 0
   p.y = -p.y;
   p = p.xzy;
   p.x = -p.x; // want x to mean left so we are right handed for phys sim!
@@ -124,4 +94,5 @@ void main()
   old_pos4 = P*vec4(ov, 1) + vec4(jitter, 0, 0);
 
   tex_uv = uvs;
+#endif
 }

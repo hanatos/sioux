@@ -199,39 +199,12 @@ void sx_world_render_entity(uint32_t ei)
   }
 
   // fprintf(stderr, "rendering entity oid: %u/%u\n", oi, sx.assets.num_objects);
-  // need to:
-  // 1) transform model to world space orientation (model q)
-  // 2) add world space position of model's center of mass (model x)
-  // 3) subtract camera position (-view x)
-  // 4) rotate world to camera   (inv view q)
-
-  //   ivq * (-vx + mx + mq * v)
-  // = ivq * (mx - vx) + (ivq mq) * v
-  //   `------o------'   `---o--'    <= store those two (vec + quat)
-
   sx_entity_t *e = sx.world.entity + ei;
 
   const quat_t *mq = &e->body.q;
-  float mvx[3] = {
-    e->body.c[0]-sx.cam.x[0],
-    e->body.c[1]-sx.cam.x[1],
-    e->body.c[2]-sx.cam.x[2]};
-  quat_t ivq = sx.cam.q;
-  quat_conj(&ivq);
-  quat_transform(&ivq, mvx);
-  quat_t mvq;
-  quat_mul(&ivq, mq, &mvq);
-
   const quat_t *omq = &e->prev_q;
-  float omvx[3] = {
-    e->prev_x[0]-sx.cam.prev_x[0],
-    e->prev_x[1]-sx.cam.prev_x[1],
-    e->prev_x[2]-sx.cam.prev_x[2]};
-  quat_t iovq = sx.cam.prev_q;
-  quat_conj(&iovq);
-  quat_transform(&iovq, omvx);
-  quat_t omvq;
-  quat_mul(&iovq, omq, &omvq);
+  const float *mp = e->body.c;
+  const float *omp = e->prev_x;
 
   sx_object_t *obj = sx.assets.object + oi;
 
@@ -242,7 +215,7 @@ void sx_world_render_entity(uint32_t ei)
   int geo_end = MAX(geo_beg+1, obj->geo_g + obj->geo_m);
 
   for(int g=geo_beg;g<geo_end;g++)
-    sx_vid_render_geo(obj->geoid[g], omvx, omvq, mvx, mvq);
+    sx_vid_render_geo(obj->geoid[g], omp, omq, mp, mq);
 }
 
 float

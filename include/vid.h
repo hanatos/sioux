@@ -28,8 +28,8 @@ int sx_vid_init_terrain(
 
 void sx_vid_render_frame();
 void sx_vid_render_geo(const uint32_t gi,
-    const float *omvx, const quat_t omvq,
-    const float *mvx,  const quat_t mvq);
+    const float *omvx, const quat_t *omvq,
+    const float *mvx,  const quat_t *mvq);
 
 // return if exit?
 int sx_vid_handle_input();

@@ -182,7 +182,7 @@ sx_coma_render(uint32_t ei, sx_heli_t *h)
     else if(g == 15 || g == 16 || g == 8 || g == 9) // weapons bay doors
       anim = h->ctl.flap;
        
-    const quat_t *mq = &ent->body.q;
+    const quat_t *bq = &ent->body.q;
     quat_t rq;
     if(com_part_rot[g][0] != 0.0f)
       quat_init_angle(&rq, anim * com_part_rot[g][0], com_part_rot[g][1], com_part_rot[g][2], com_part_rot[g][3]);
@@ -193,7 +193,14 @@ sx_coma_render(uint32_t ei, sx_heli_t *h)
       -h->cmm[1] + ft2m( com_part_pos[g][2]/(float)0xffff),
       -h->cmm[2] + ft2m(-com_part_pos[g][1]/(float)0xffff),
     }; // offset in model space
-    quat_transform(mq, vo); // model to world space
+    quat_transform(bq, vo); // model to world space
+    float mp[3] = {
+      ent->body.c[0]+vo[0],
+      ent->body.c[1]+vo[1],
+      ent->body.c[2]+vo[2]};
+    quat_t mq;
+    quat_mul(bq, &rq, &mq);
+#if 0
     float mvx[3] = {
       ent->body.c[0]-sx.cam.x[0]+vo[0],
       ent->body.c[1]-sx.cam.x[1]+vo[1],
@@ -204,6 +211,7 @@ sx_coma_render(uint32_t ei, sx_heli_t *h)
     quat_t tmp, mvq;
     quat_mul(&ivq, mq, &tmp);
     quat_mul(&tmp, &rq, &mvq);
+#endif
 
     // for motion vectors, previous frame:
     const quat_t *omq = &ent->prev_q;
@@ -229,7 +237,8 @@ sx_coma_render(uint32_t ei, sx_heli_t *h)
     quat_mul(&iovq, omq, &otmp);
     quat_mul(&otmp, &orq, &omvq);
 
-    sx_vid_render_geo(obj->geoid[g], omvx, omvq, mvx, mvq);
+    // XXX TODO: consider transformation/rotation!
+    sx_vid_render_geo(obj->geoid[g], mp, &mq, mp, &mq);
   }
 }
 
