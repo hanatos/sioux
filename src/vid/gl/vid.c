@@ -1283,10 +1283,10 @@ int sx_vid_handle_input()
       switch(event.jaxis.axis)
       {
         case 0:
-          sx_heli_control_cyclic_x(sx.world.player_move, event.jaxis.value/(float)0xffff);
+          sx_heli_control_cyclic_x(sx.world.player_move, event.jaxis.value/(float)0x7fff);
           break;
         case 1:
-          sx_heli_control_cyclic_z(sx.world.player_move, -event.jaxis.value/(float)0xffff);
+          sx_heli_control_cyclic_z(sx.world.player_move, -event.jaxis.value/(float)0x7fff);
           break;
         case 2:
           {
@@ -1297,7 +1297,7 @@ int sx_vid_handle_input()
           break;
           }
         case 3:
-          sx_heli_control_tail(sx.world.player_move, event.jaxis.value/(float)0xffff);
+          sx_heli_control_tail(sx.world.player_move, event.jaxis.value/(float)0x7fff);
           break;
         case 4:
           sx.cam.angle_right = event.jaxis.value/(float)0x7fff;
