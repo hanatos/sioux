@@ -25,9 +25,15 @@ float hash1( float n )
   return fract( n*17.0*fract( n*0.3183099 ) );
 }
 
-float get_height(vec2 uv)
+float get_height(vec3 pos)
 {
-  float h = textureLod(terrain_dis, uv, 0).r;
+  const float k_terrain_scale = 1.0/(3.0*0.3048*2048.0);
+  vec2 uv = -k_terrain_scale * (u_pos_ws.xz + pos.xz);
+  float dist = length(pos);
+  int lod = 0;
+  lod = clamp(int(dist / 100), 0, 5);
+  float h = textureLod(terrain_dis, uv, lod).r;
+  if(dist > 100) return h;
   // return h;
 #if 1
   // float mat = 256*texture(terrain_det, uv).r;
@@ -56,10 +62,7 @@ void main(void)
       + gl_TessCoord.y*gl_in[1].gl_Position
       + gl_TessCoord.z*gl_in[2].gl_Position;
 
-  // TODO: look up character maps!
-  const float k_terrain_scale = 1.0/(3.0*0.3048*2048.0);
-  vec2 tex_uv = -k_terrain_scale * (u_pos_ws.xz + p.xz);
-  p.y = u_terrain_bounds.x - u_pos_ws.y + u_terrain_bounds.y * get_height(tex_uv);
+  p.y = u_terrain_bounds.x - u_pos_ws.y + u_terrain_bounds.y * get_height(vec3(p));
   gl_Position = u_mvp * p; //P*vec4(v, 1) + vec4(jitter, 0, 0);
   // old_pos4 = P*vec4(ov, 1) + vec4(jitter, 0, 0);
   te_pos_ws = vec3(p);

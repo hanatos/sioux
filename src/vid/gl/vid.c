@@ -113,9 +113,9 @@ recompile()
   do {\
   char *vert_shader = file_load("src/vid/gl/shaders/"vert".vert", 0);\
   char *frag_shader = file_load("src/vid/gl/shaders/"frag".frag", 0);\
-  char *ttcs_shader = file_load("src/vid/gl/shaders/"tcs".tcs", 0);\
-  char *ttes_shader = file_load("src/vid/gl/shaders/"tes".tes", 0);\
-  char *geom_shader = file_load("src/vid/gl/shaders/"geo".geo", 0);\
+  char *ttcs_shader = file_load("src/vid/gl/shaders/"tcs".tesc", 0);\
+  char *ttes_shader = file_load("src/vid/gl/shaders/"tes".tese", 0);\
+  char *geom_shader = file_load("src/vid/gl/shaders/"geo".geom", 0);\
   assert(vert_shader);\
   assert(frag_shader);\
   assert(ttcs_shader);\
@@ -577,6 +577,8 @@ int sx_vid_init_terrain(
     {
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      if(k == 1)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
     }
     else
     {
@@ -596,8 +598,15 @@ int sx_vid_init_terrain(
     else if(k == 1 || k == 4) // displacements
     {
       // upload original texture
-      glTexStorage2D(GL_TEXTURE_2D, 1, GL_R8, width, height);
+      int num_mipmaps = 1;
+      if(k == 1) num_mipmaps = 10;
+      glTexStorage2D(GL_TEXTURE_2D, num_mipmaps, GL_R8, width, height);
       glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED, GL_UNSIGNED_BYTE, buf);
+
+      // generate mip maps
+      if(num_mipmaps > 1)
+        glGenerateMipmap(GL_TEXTURE_2D);
+
       // also do some mip mapping for ray tracing
       if(k == 1)
         glBindTexture(GL_TEXTURE_2D, sx.vid.tex_terrain[6]);

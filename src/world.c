@@ -183,6 +183,11 @@ void sx_world_render_entity(uint32_t ei)
   uint32_t oi = sx.world.entity[ei].objectid;
   if(oi < 0 || oi >= sx.assets.num_objects) return;
 
+  // LOD: discard stuff > 1k
+  float d[3], md = 1000;
+  for(int k=0;k<3;k++) d[k] = sx.world.entity[ei].body.c[k] - sx.cam.x[k];
+  if(dot(d, d) > md*md) return;
+
   if(//sx.cam.mode == s_cam_inside_cockpit ||
      sx.cam.mode == s_cam_inside_no_cockpit)
     if(ei == sx.world.player_entity) return;

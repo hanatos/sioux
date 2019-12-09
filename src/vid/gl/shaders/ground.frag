@@ -19,14 +19,18 @@ out vec4 frag_color;
 in vec3 pos_ws;
 in vec3 normal;
 
-vec4 get_colour(vec2 uv)
+vec4 get_colour(vec3 pos)
 {
+  const float k_terrain_scale = 1.0/(3.0*0.3048*2048.0);
+  vec2 uv = -k_terrain_scale * (u_pos_ws.xz + pos.xz);
 #if 0
   return texture(terrain_col, uv);
 #else
   // float mat = 256*texture(terrain_det, uv).r;
   // ivec3 mat = ivec3(256*texelFetch(terrain_det, ivec2(1024*uv+.5f), 0).rgb);
   vec3 base = texture(terrain_col, uv).rgb;
+
+  if(length(pos) > 100) return vec4(base, 1);
   // uvec3 mat = texelFetch(terrain_det, ivec2(1024*uv+.5f), 0).rgb/4;
   uvec3 mat = uvec3(textureLod(terrain_det, uv, 0).rgb*256.0/4.0);
   // return vec4(mat, 1);
@@ -73,10 +77,7 @@ void main()
   // XXX TODO: get normal from precomputed normal of texture map in 3 channels
   const vec3 sun = normalize(vec3(1.0, 1.0, 0.0));
   float diff = 0.98f + 0.02f*max(0, dot(sun, normalize(normal)));
-
-  const float k_terrain_scale = 1.0/(3.0*0.3048*2048.0);
-  vec2 tex_uv = -k_terrain_scale * (u_pos_ws.xz + pos_ws.xz);
-  frag_color = diff*get_colour(tex_uv);
+  frag_color = diff*get_colour(pos_ws);
 
   // frag_color = vec4(0.0f, mod(100*tc, 1), 1.0f);
   // frag_color = vec4(0.0f, 0.1*mod(tex_uv3, 1), 1.0f);
