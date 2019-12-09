@@ -1,76 +1,6 @@
 #version 450 core
 layout (triangles, equal_spacing, cw) in;
 
-#if 0
-control:
-    layout(vertices = 4) out;
-
-    uniform vec2 screen_size;
-    uniform mat4 mvp;
-    uniform float lod_factor;
-    
-    bool offscreen(vec4 vertex){
-        if(vertex.z < -0.5){
-            return true;
-        }
-        return any(
-            lessThan(vertex.xy, vec2(-1.7)) ||
-            greaterThan(vertex.xy, vec2(1.7))
-        );
-    }
-    
-    vec4 project(vec4 vertex){
-        vec4 result = mvp * vertex;
-        result /= result.w;
-        return result;
-    }
-
-    vec2 screen_space(vec4 vertex){
-        return (clamp(vertex.xy, -1.3, 1.3)+1) * (screen_size*0.5);
-    }
-
-    float level(vec2 v0, vec2 v1){
-        return clamp(distance(v0, v1)/lod_factor, 1, 64);
-    }
-
-    void main(){
-        if(gl_InvocationID == 0){
-            vec4 v0 = project(gl_in[0].gl_Position);
-            vec4 v1 = project(gl_in[1].gl_Position);
-            vec4 v2 = project(gl_in[2].gl_Position);
-            vec4 v3 = project(gl_in[3].gl_Position);
-
-            if(all(bvec4(offscreen(v0), offscreen(v1), offscreen(v2), offscreen(v3)))){
-                gl_TessLevelInner[0] = 0;
-                gl_TessLevelInner[1] = 0;
-                gl_TessLevelOuter[0] = 0;
-                gl_TessLevelOuter[1] = 0;
-                gl_TessLevelOuter[2] = 0;
-                gl_TessLevelOuter[3] = 0;
-            }
-            else{
-                vec2 ss0 = screen_space(v0);
-                vec2 ss1 = screen_space(v1);
-                vec2 ss2 = screen_space(v2);
-                vec2 ss3 = screen_space(v3);
-
-                float e0 = level(ss1, ss2);
-                float e1 = level(ss0, ss1);
-                float e2 = level(ss3, ss0);
-                float e3 = level(ss2, ss3);
-
-                gl_TessLevelInner[0] = mix(e1, e2, 0.5);
-                gl_TessLevelInner[1] = mix(e0, e3, 0.5);
-                gl_TessLevelOuter[0] = e0;
-                gl_TessLevelOuter[1] = e1;
-                gl_TessLevelOuter[2] = e2;
-                gl_TessLevelOuter[3] = e3;
-            }
-        }
-        gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
-    }
-#endif
-
 uniform vec2 u_terrain_bounds;
 uniform float u_time;
 uniform vec2 u_res;
@@ -95,6 +25,30 @@ float hash1( float n )
   return fract( n*17.0*fract( n*0.3183099 ) );
 }
 
+float get_height(vec2 uv)
+{
+  float h = textureLod(terrain_dis, uv, 0).r;
+  // return h;
+#if 1
+  // float mat = 256*texture(terrain_det, uv).r;
+  // uvec3 mat = texelFetch(terrain_det, ivec2(1024*uv+.5f), 0).rgb/4;
+  // uvec3 mat = textureLod(terrain_det, uv, 0).rgb/4;
+  uvec3 mat = uvec3(textureLod(terrain_det, uv, 0).rgb*256.0/4.0);
+  uint tile = mat.r + 72;//144;
+  if(mat.r == 0) tile = mat.b;
+#if 1
+  float dis = texelFetch(
+    terrain_cdis, ivec2(mod(16*1024*uv, vec2(16)))+ivec2(0, 16*tile), 0).r;
+#else
+  float dis = textureLod(
+      terrain_cdis, (ivec2(mod(16*1024*uv, vec2(16)))+ivec2(0, 16*tile))/vec2(16.0, 4096.0), 0).r;
+#endif
+  // if(mat.r != 0) return h;// + (dis-.5)/64.0;
+  // if(mat.r == 0) return h + 0.01;
+  return h + (.5-dis)/32.0;//64.0;
+#endif
+}
+
 void main(void)
 { 
   vec4 p = // input model coordinates
@@ -105,7 +59,7 @@ void main(void)
   // TODO: look up character maps!
   const float k_terrain_scale = 1.0/(3.0*0.3048*2048.0);
   vec2 tex_uv = -k_terrain_scale * (u_pos_ws.xz + p.xz);
-  p.y = u_terrain_bounds.x - u_pos_ws.y + u_terrain_bounds.y * texture(terrain_dis, tex_uv).r;
+  p.y = u_terrain_bounds.x - u_pos_ws.y + u_terrain_bounds.y * get_height(tex_uv);
   gl_Position = u_mvp * p; //P*vec4(v, 1) + vec4(jitter, 0, 0);
   // old_pos4 = P*vec4(ov, 1) + vec4(jitter, 0, 0);
   te_pos_ws = vec3(p);

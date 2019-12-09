@@ -572,8 +572,8 @@ int sx_vid_init_terrain(
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    // if(k == 1 || k == 4 || k == 0 || k == 3)
-    if(1)//if(k == 0 || k == 3) // colour buffers
+    if(k == 1 || k == 4 || k == 0 || k == 3) // colour and displacement buffers
+    // if(1)//if(k == 0 || k == 3) // colour buffers
     {
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -879,6 +879,7 @@ void sx_vid_render_frame()
         uint32_t program = sx.vid.program_terrain;
         glUseProgram(program);
         glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
+        glUniform1f(glGetUniformLocation(program, "u_lod"), 1);
         glUniform2f(glGetUniformLocation(program, "u_res"),
             sx.vid.cube[k]->width, sx.vid.cube[k]->height);
         glUniform1i(glGetUniformLocation(program, "u_frame"), sx.time);
