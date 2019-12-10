@@ -1,5 +1,9 @@
 #pragma once
 
+// this wraps the "move routines" found in the .ai files of c3.
+// we'll also assume that ambient sounds and damage controls are
+// included in this concept.
+
 // generic interface functions:
 
 // TODO: interface to return list of points to check for collision with boxes
@@ -21,5 +25,6 @@ typedef struct sx_move_t
   char id[4]; // this movement controller's 4-character id
   sx_move_damage_t damage;
   sx_move_update_forces_t update_forces;
+  uint32_t snd_ambient;
 }
 sx_move_t;

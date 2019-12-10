@@ -9,6 +9,7 @@ typedef enum sx_camera_mode_t
   s_cam_right,
   s_cam_homing,
   s_cam_flyby,
+  s_cam_rotate,
 }
 sx_camera_mode_t;
 

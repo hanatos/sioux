@@ -25,9 +25,10 @@ sx_init()
   sx.audio_dev = Mix_OpenAudio(sx.audio_spec.freq, sx.audio_spec.format, sx.audio_spec.channels, sx.audio_spec.samples);
   if ( Mix_AllocateChannels(8) < 0)
   {
-    fprintf(stderr, "Unable to allocate mixing channels: %s\n", Mix_GetError());
+    fprintf(stderr, "[sx] unable to allocate mixing channels: %s\n", Mix_GetError());
     exit(EXIT_FAILURE);
   }
+  Mix_ReserveChannels(1); // for radio
   fprintf(stderr, "[sx] got audio spec %d %d %d\n", sx.audio_spec.channels, sx.audio_spec.freq, sx.audio_spec.samples);
   return 0;
 }

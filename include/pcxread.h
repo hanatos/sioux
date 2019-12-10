@@ -1,6 +1,6 @@
 #pragma once
 
-// stolen frim gimp and under GPLv3
+// stolen from gimp and under GPLv3
 
 typedef struct gimp_pcx_header_t
 {
@@ -29,9 +29,6 @@ readline(
     uint8_t           *buf,
     int                bytes)
 {
-  // argh! who writes such code!
-  // XXX static
-    
   uint8_t count = 0, value = 0;
 
   if(h->compression)
@@ -57,7 +54,7 @@ readline(
     return start;
   }
   else memcpy(buf, h->data+start, bytes);
-  return bytes;
+  return start + bytes;
 }
 
 static inline void
@@ -65,7 +62,7 @@ load_8 (gimp_pcx_header_t *h,
         int                width,
         int                height,
         uint8_t           *buf,
-        uint16_t           bytes)
+        int                bytes)
 {
   int    row;
   uint8_t *line = malloc(sizeof(uint8_t)*bytes);
@@ -103,46 +100,6 @@ load_24 (gimp_pcx_header_t *h,
   free (line);
 }
 
-
-#if 0
-static struct {
-  size_t   size;
-  gpointer address;
-} const pcx_header_buf_xlate[] = {
-  { 1,  &pcx_header.manufacturer },
-  { 1,  &pcx_header.version      },
-  { 1,  &pcx_header.compression  },
-  { 1,  &pcx_header.bpp          },
-  { 2,  &pcx_header.x1           },
-  { 2,  &pcx_header.y1           },
-  { 2,  &pcx_header.x2           },
-  { 2,  &pcx_header.y2           },
-  { 2,  &pcx_header.hdpi         },
-  { 2,  &pcx_header.vdpi         },
-  { 48, &pcx_header.colormap     },
-  { 1,  &pcx_header.reserved     },
-  { 1,  &pcx_header.planes       },
-  { 2,  &pcx_header.bytesperline },
-  { 2,  &pcx_header.color        },
-  { 58, &pcx_header.filler       },
-  { 0,  NULL }
-};
-
-static void
-pcx_header_from_buffer (guint8 *buf)
-{
-  gint i;
-  gint buf_offset = 0;
-
-  for (i = 0; pcx_header_buf_xlate[i].size != 0; i++)
-    {
-      memmove (pcx_header_buf_xlate[i].address, buf + buf_offset,
-               pcx_header_buf_xlate[i].size);
-      buf_offset += pcx_header_buf_xlate[i].size;
-    }
-}
-#endif
-
 static inline int
 pcx_load(
     const char  *filename,
@@ -151,8 +108,6 @@ pcx_load(
     uint8_t    **px,
     int          alphahack)
 {
-  // uint8_t  cmap[768];
-
   uint64_t filesize = 0;
   gimp_pcx_header_t *h = file_load(filename, &filesize);
 
@@ -185,74 +140,6 @@ pcx_load(
   uint8_t *dest = malloc(4*width*height);
   *px = dest;
 
-#if 0
-  // XXX i think this is the only case i care about:
-  if (pcx_header.planes == 3 && pcx_header.bpp == 8)
-    {
-      image= gimp_image_new (width, height, GIMP_RGB);
-      layer= gimp_layer_new (image, _("Background"), width, height,
-                             GIMP_RGB_IMAGE,
-                             100,
-                             gimp_image_get_default_new_layer_mode (image));
-    }
-  else
-    {
-      image= gimp_image_new (width, height, GIMP_INDEXED);
-      layer= gimp_layer_new (image, _("Background"), width, height,
-                             GIMP_INDEXED_IMAGE,
-                             100,
-                             gimp_image_get_default_new_layer_mode (image));
-    }
-#endif
-
-#if 0
-  if (pcx_header.planes == 1 && pcx_header.bpp == 1)
-    {
-      dest = g_new (guchar, ((gsize) width) * height);
-      load_1 (fd, width, height, dest, bytesperline);
-      /* Monochrome does not mean necessarily B&W. Therefore we still
-       * want to check the header palette, even for just 2 colors.
-       * Hopefully the header palette will always be filled with
-       * meaningful colors and the creator software did not just assume
-       * B&W by being monochrome.
-       * Until now test samples showed that even when B&W the header
-       * palette was correctly filled with these 2 colors and we didn't
-       * find counter-examples.
-       * See bug 159947, comment 21 and 23.
-       */
-      gimp_image_set_colormap (image, pcx_header.colormap, 2);
-    }
-  else if (pcx_header.bpp == 1 && pcx_header.planes == 2)
-    {
-      dest = g_new (guchar, ((gsize) width) * height);
-      load_sub_8 (fd, width, height, 1, 2, dest, bytesperline);
-      gimp_image_set_colormap (image, pcx_header.colormap, 4);
-    }
-  else if (pcx_header.bpp == 2 && pcx_header.planes == 1)
-    {
-      dest = g_new (guchar, ((gsize) width) * height);
-      load_sub_8 (fd, width, height, 2, 1, dest, bytesperline);
-      gimp_image_set_colormap (image, pcx_header.colormap, 4);
-    }
-  else if (pcx_header.bpp == 1 && pcx_header.planes == 3)
-    {
-      dest = g_new (guchar, ((gsize) width) * height);
-      load_sub_8 (fd, width, height, 1, 3, dest, bytesperline);
-      gimp_image_set_colormap (image, pcx_header.colormap, 8);
-    }
-  else if (pcx_header.bpp == 1 && pcx_header.planes == 4)
-    {
-      dest = g_new (guchar, ((gsize) width) * height);
-      load_4 (fd, width, height, dest, bytesperline);
-      gimp_image_set_colormap (image, pcx_header.colormap, 16);
-    }
-  else if (pcx_header.bpp == 4 && pcx_header.planes == 1)
-    {
-      dest = g_new (guchar, ((gsize) width) * height);
-      load_sub_8 (fd, width, height, 4, 1, dest, bytesperline);
-      gimp_image_set_colormap (image, pcx_header.colormap, 16);
-    }
-#endif
   if (h->bpp == 8 && h->planes == 1)
   {
     fprintf(stderr, "[gimp pcx] 8-bit indexed pcx\n");
@@ -283,106 +170,11 @@ pcx_load(
     fprintf(stderr, "[gimp pcx] b/w pcx\n");
     load_24(h, width, height, dest, h->bytesperline);
   }
-#if 0
   else
-    {
-      g_message (_("Unusual PCX flavour, giving up"));
-      fclose (fd);
-      return -1;
-    }
-#endif
+  {
+    fprintf(stderr, "[gimp pcx] sorry can't read this format\n");
+  }
    
   free(h);
   return 0;
 }
-
-#if 0
-
-static inline void
-load_1 (FILE    *fp,
-        int      width,
-        int      height,
-        uint8_t *buf,
-        uint16_t bytes)
-{
-  int    x, y;
-  uint8_t *line = malloc(sizeof(uint8_t)*bytes);
-
-  for (y = 0; y < height; buf += width, ++y)
-  {
-    readline (fp, line, bytes);
-    for (x = 0; x < width; ++x)
-    {
-      if (line[x / 8] & (128 >> (x % 8)))
-        buf[x] = 1;
-      else
-        buf[x] = 0;
-    }
-  }
-  free (line);
-}
-
-static inline void
-load_4 (FILE    *fp,
-        int      width,
-        int      height,
-        uint8_t *buf,
-        uint16_t bytes)
-{
-  int    x, y, c;
-  uint8_t *line = malloc(sizeof(uint8_t)*bytes);
-
-  for (y = 0; y < height; buf += width, ++y)
-  {
-    for (x = 0; x < width; ++x)
-      buf[x] = 0;
-    for (c = 0; c < 4; ++c)
-    {
-      readline(fp, line, bytes);
-      for (x = 0; x < width; ++x)
-      {
-        if (line[x / 8] & (128 >> (x % 8)))
-          buf[x] += (1 << c);
-      }
-    }
-  }
-  free (line);
-}
-
-static inline void
-load_sub_8 (FILE     *fp,
-            int       width,
-            int       height,
-            int       bpp,
-            int       plane,
-            uint8_t  *buf,
-            uint16_t  bytes)
-{
-  int      x, y, c, b;
-  uint8_t *line = g_new (guchar, bytes);
-  int      real_bpp = bpp - 1;
-  int      current_bit = 0;
-
-  for (y = 0; y < height; buf += width, ++y)
-  {
-    for (x = 0; x < width; ++x)
-      buf[x] = 0;
-    for (c = 0; c < plane; ++c)
-    {
-      readline (fp, line, bytes);
-      for (x = 0; x < width; ++x)
-      {
-        for (b = 0; b < bpp; b++)
-        {
-          current_bit = bpp * x + b;
-          if (line[current_bit / 8] & (128 >> (current_bit % 8)))
-            buf[x] += (1 << (real_bpp - b + c));
-        }
-      }
-    }
-  }
-  free (line);
-}
-
-#endif
-

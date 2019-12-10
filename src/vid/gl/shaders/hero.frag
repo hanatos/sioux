@@ -238,20 +238,12 @@ void main()
   encrypt_tea(seed);
   if(float(seed.x) / 4294967296.0 > diffcol.w) discard;
   diffcol.w = 1.0;
-  // if(diffcol.w < 0.01) discard;
 
   // fake reflections
   // col += fake_fresnel(0.01, cos_wi) * vec3(1);//diffenv(ref, 2).rgb;
 
-  // XXX direction needs fixing here (also need to composite with clouds, too)
-  // const float tau = atmosphere(u_pos_ws, wi, length(position_cs));
   out_colour.rgb = col;//tau * col + (1-tau)*k_fog_col;
   out_colour.w = diffcol.w;
-  // out_colour.rgb *= diffcol.w;
-  // out_colour.rgb = vec3(material);
-  // out_colour.rbw = vec3(1,1,1); // XXX DEBUG
-  // out_colour.w = 1;
-  // out_colour = vec4(fog(col, length(position_cs)), 1);
 
   // motion:
   // output fragment position instead of motion vector here

@@ -1,4 +1,5 @@
 #pragma once
+#include "file.h"
 // stolen from darktable, GPLv3
 #include <inttypes.h>
 #include <png.h>

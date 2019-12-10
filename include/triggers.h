@@ -18,19 +18,19 @@
 // setai
 // route
 
-typedef enum c3_condition_midi_t
+typedef enum c3_gamestate_t
 {
-  C3_COND_DIRE = 0,
-  C3_COND_FLIGHT,
-  C3_COND_LOSE_WIN,
-  C3_COND_WIN,
-  C3_COND_LOSE,
-  C3_COND_COMBAT,
-  C3_COND_PAD,
-  C3_COND_SCARY,
-  C3_COND_MIDI_SIZE,
+  C3_GAMESTATE_DIRE = 0,
+  C3_GAMESTATE_FLIGHT,
+  C3_GAMESTATE_LOSE_WIN,
+  C3_GAMESTATE_WIN,
+  C3_GAMESTATE_LOSE,
+  C3_GAMESTATE_COMBAT,
+  C3_GAMESTATE_PAD,
+  C3_GAMESTATE_SCARY,
+  C3_GAMESTATE_SIZE,
 }
-c3_condition_midi_t;
+c3_gamestate_t;
 
 // the clean way would probably be to define non-static
 // and provide the linkage in the c file. too lazy.
@@ -52,6 +52,7 @@ typedef enum c3_condition_t
   C3_COND_NEARER = 0, // nearer, <distance>, <object/waypoint>
   C3_COND_FARTHER,    // farther, <distance>, <object>
   C3_COND_ALIVE,      // alive, <object>
+  C3_COND_INTACT,     // intact, <object>
   C3_COND_KILLED,     // killed, <object>, <num??>
   C3_COND_DESTROYED,  // killed, <object>
   C3_COND_BELOW,      // below, <altitude>

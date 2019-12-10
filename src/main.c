@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
   const uint32_t delta_sim_time = 1000.0f/60.0f; // usual vsync
   while(1)
   {
-    sx_vid_render_frame();
+    sx_vid_render_frame_rect();
 
     uint32_t end = SDL_GetTicks();
     while(sim_time < end)
@@ -45,11 +45,11 @@ int main(int argc, char *argv[])
     if(end - last_event > 1000)
     {
       c3_mission_pump_events(&sx.mission);
-      // if(sx.mission.time > 2) break; // DEBUG
       fprintf(stderr, "\r %.3g ms", (end - last_event)/(double)frames);
       frames = 0;
       last_event = end;
     }
+    // time is real time (lower gear animation etc)
     sx.time = end;
   }
 out:

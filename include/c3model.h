@@ -200,10 +200,10 @@ c3m_to_float_arrays(
   // we also got triangles that refer to the same vertex but to
   // a different normal. in such a case, we'll need to duplicate
   // the vertex.
-  // we'll assume that vertices aren't more than tripled here:
+  // we'll assume no more than 6x the vertices:
   uint32_t num_vertices = c3m_num_vertices(h);
   const int num_tris = c3m_num_triangles(h);
-  uint32_t hard_length = num_tris * 3;
+  uint32_t hard_length = num_tris * 6;
   if(hard_length < num_vertices) hard_length = 2*num_vertices;
   uint32_t num_dup_vertices = num_vertices;
   uint32_t *dedup_v = malloc(sizeof(uint32_t)*hard_length);

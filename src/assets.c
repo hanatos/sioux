@@ -32,7 +32,7 @@ sx_assets_load_music(
   for(int k=0;k<a->num_music;k++)
     if(!strcmp(a->fmusic[k]->filename, filename))
       return k;
-  assert(a->num_music < C3_COND_MIDI_SIZE);
+  assert(a->num_music < C3_GAMESTATE_SIZE);
   if(sx_music_init(sx_assets_filename_to_music(a, filename), filename))
 		  return -1;
   return a->num_music++;
@@ -46,7 +46,7 @@ sx_music_t* sx_assets_filename_to_music(sx_assets_t* a, const char* filename)
 	char* fn = NULL;
 	sx_music_t* m = NULL;
 
-	for(int i=0;i<C3_COND_MIDI_SIZE;i++) 
+	for(int i=0;i<C3_GAMESTATE_SIZE;i++) 
 	{
 		fn = NULL;
   		if((fn = strstr(filename, c3_condition_midi_text[i])))

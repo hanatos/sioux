@@ -1,5 +1,6 @@
 #version 450 core
-layout (triangles, equal_spacing, cw) in;
+// layout (triangles, equal_spacing, cw) in;
+layout (quads, equal_spacing, cw) in;
 
 uniform vec2 u_terrain_bounds;
 uniform float u_time;
@@ -31,7 +32,7 @@ float get_height(vec3 pos)
   vec2 uv = -k_terrain_scale * (u_pos_ws.xz + pos.xz);
   float dist = length(pos);
   int lod = 0;
-  lod = clamp(int(dist / 100), 0, 5);
+  // lod = clamp(int(dist / 100), 0, 5);
   float h = textureLod(terrain_dis, uv, lod).r;
   if(dist > 100) return h;
   // return h;
@@ -57,10 +58,15 @@ float get_height(vec3 pos)
 
 void main(void)
 { 
-  vec4 p = // input model coordinates
-        gl_TessCoord.x*gl_in[0].gl_Position
-      + gl_TessCoord.y*gl_in[1].gl_Position
-      + gl_TessCoord.z*gl_in[2].gl_Position;
+  // vec4 p = // input model coordinates
+  //       gl_TessCoord.x*gl_in[0].gl_Position
+  //     + gl_TessCoord.y*gl_in[1].gl_Position
+  //     + gl_TessCoord.z*gl_in[2].gl_Position;
+  // quads:
+  vec4 p = mix(
+      mix(gl_in[1].gl_Position, gl_in[0].gl_Position, gl_TessCoord.x),
+      mix(gl_in[2].gl_Position, gl_in[3].gl_Position, gl_TessCoord.x),
+      gl_TessCoord.y);
 
   p.y = u_terrain_bounds.x - u_pos_ws.y + u_terrain_bounds.y * get_height(vec3(p));
   gl_Position = u_mvp * p; //P*vec4(v, 1) + vec4(jitter, 0, 0);

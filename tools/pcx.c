@@ -1,6 +1,7 @@
 #include "file.h"
 #include "decompress.h"
 #include "pngio.h"
+#include "bc3io.h"
 #include "pcxread.h"
 
 #include <stdlib.h>
@@ -31,6 +32,15 @@ int main(int argc, char *argv[])
     fprintf(stderr, "[pcx] usage: ./pcx <input.pcx> <output.png>\n");
     exit(1);
   }
+
+  char bc3name[256];
+  snprintf(bc3name, sizeof(bc3name), "%s", argv[2]);
+  char *c = bc3name+strlen(bc3name);
+  for(;c>bc3name&&*c!='.';c--);
+  *(++c) = 'b';
+  *(++c) = 'c';
+  *(++c) = '3';
+
 
   char *fn = basename(argv[1]);
   int alphahack = 1;
@@ -79,6 +89,7 @@ int main(int argc, char *argv[])
     if(pcx_load(argv[1], &wd, &ht, &px, alphahack))
       exit(1);
     png_write(outname, wd, ht, px, 8);
+    bc3_write(bc3name, wd, ht, px);
     free(px);
     exit(0);
   }
@@ -204,6 +215,7 @@ int main(int argc, char *argv[])
       px[4*k+3] = c <= 127 ? 255-2*c : 0;
   }
   png_write(outname, pcx->wd, pcx->ht, px, 8);
+  bc3_write(bc3name, pcx->wd, pcx->ht, px);
   free(px);
   free(pcx);
   if(dec != pcx->data) free(dec);

@@ -4,6 +4,7 @@
 #include "vid/gl/fbo.h"
 #include "file.h"
 #include "pngio.h"
+#include "bc3io.h"
 #include "physics/heli.h"
 #include "terrain.h"
 #include "matrix4.h"
@@ -29,7 +30,6 @@ compile_src(const char *src, int type)
   return shader_obj;
 }
 
-#if 0
 static unsigned int
 compile_compute_shader(const char *src)
 {
@@ -53,7 +53,6 @@ compile_compute_shader(const char *src)
 
   return prog;
 }
-#endif
 
 
 static unsigned int
@@ -129,18 +128,23 @@ recompile()
   free(vert_shader);\
   free(frag_shader); } while(0)
 
-  // CC(draw_texture, "fstri", "trace2");
   CC(draw_texture, "fstri", "terrain");
+  CC(draw_env, "fstri", "env");
   CC(draw_hud, "hud", "hud");
   CC(hud_text, "hud_text", "hud_text");
   CC(taa, "fstri", "taa");
   CC(blit_texture, "fstri", "blit");
   CC(grade, "fstri", "hud_horizon");
   CC(hero, "hero", "hero");
-  CC(debug_line, "hero", "line");
+  CC(debug_line, "line", "line");
+  CC(debug_flow, "flow", "line");
   CCC(terrain, "ground", "ground", "ground", "ground", "ground");
+  // CC(compute_flow, "fstri", "flowcomp");
 #undef CC
 #undef CCC
+  char *comp = file_load("src/vid/gl/shaders/flow.comp", 0);
+  sx.vid.program_compute_flow = compile_compute_shader(comp);
+  free(comp);
 }
 
 static void
@@ -292,7 +296,7 @@ int sx_vid_init(
   glBindAttribLocation(sx.vid.program_terrain, 0, "position");
   // index buffer
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sx.vid.vbo_terrain[1]);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*sx.vid.terrain_idx_cnt*3, sx.vid.terrain_idx, GL_STATIC_DRAW);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t)*sx.vid.terrain_idx_cnt*4, sx.vid.terrain_idx, GL_STATIC_DRAW);
 
   // heads up display:
   glGenVertexArrays(1, &sx.vid.vao_hud);
@@ -352,6 +356,48 @@ int sx_vid_init(
         SDL_JoystickNumBalls(sx.vid.joystick));
   }
 
+  // init instance buffers (mat4 mv, mvp)
+  glGenBuffers(1, &sx.vid.geo_instance_ssbo);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, sx.vid.geo_instance_ssbo);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, 320000, 0, GL_STREAM_DRAW);
+
+  // init flow textures
+  sx.vid.tex_flow_cnt = 2;
+  glGenTextures(sx.vid.tex_flow_cnt, sx.vid.tex_flow);
+  const int wd = 128;
+  float *buf = malloc(sizeof(float)*wd*wd*wd*3);
+  for(int k=0;k<wd*wd*wd;k++)
+  {
+    buf[3*k+0] = -10;
+    buf[3*k+1] = 0;
+    buf[3*k+2] = 0;
+  }
+  for(int k=0;k<sx.vid.tex_flow_cnt;k++)
+  {
+#if 1
+    glBindTexture(GL_TEXTURE_2D, sx.vid.tex_flow[k]);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    float col[3] = {0,0,0};
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, col);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 2048, 1024, 0, GL_RGB, GL_FLOAT, buf);
+#else
+    glBindTexture(GL_TEXTURE_3D, sx.vid.tex_flow[k]);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    float col[3] = {0,0,0};
+    glTexParameterfv(GL_TEXTURE_3D, GL_TEXTURE_BORDER_COLOR, col);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16F, wd, wd, wd, 0, GL_RGB, GL_FLOAT, buf);
+#endif
+  }
+  free(buf);
+  sx.vid.tex_flow_curr = 0;
+
   return 0;
 }
 
@@ -388,7 +434,7 @@ uint32_t sx_vid_init_geo(const char *filename, float *aabb)
   sx_geo_t *g = sx.vid.geo + i;
   memset(g, 0, sizeof(sx_geo_t));
 
-  strncpy(g->filename, filename, sizeof(g->filename));
+  strncpy(g->filename, filename, sizeof(g->filename)-1);
 
   // get basic geo layout stuff:
   float *vertices, *normals, *uvs;
@@ -673,19 +719,20 @@ uint32_t sx_vid_init_image(const char *filename, uint32_t *texid)
   fn[len-4-z] = 0;
 
   char pattern[150] = {0};
-  if(z > 0) snprintf(pattern, sizeof(pattern), "%s%%0%uu.png", fn, z);
-  else      snprintf(pattern, sizeof(pattern), "%s.png", fn);
+  if(z > 0) snprintf(pattern, sizeof(pattern), "%s%%0%uu.bc3", fn, z);
+  else      snprintf(pattern, sizeof(pattern), "%s.bc3", fn);
   int prev_wd = 0, prev_ht = 0;
   for(int i=0;i<32;i++)
   { // don't go over memory bound, max textures is 32
     snprintf(fn, sizeof(fn), pattern, i+off);
 
-    int width, height, bpp;
+    int width, height, bpp = 8;
     uint8_t *buf;
-    int err = png_read(fn, &width, &height, (void**)&buf, &bpp);
+    // int err = png_read(fn, &width, &height, (void**)&buf, &bpp);
+    int err = bc3_read(fn, &width, &height, &buf);
     if(err && (cnt == 0))
     {
-      fprintf(stderr, "[vid] failed to open `%s'\n", filename);
+      fprintf(stderr, "[vid] failed to open `%s' (%d)\n", fn, err);
       return 0;
     }
     else if(err && (cnt > 0)) return cnt;
@@ -701,9 +748,11 @@ uint32_t sx_vid_init_image(const char *filename, uint32_t *texid)
 
     glGenTextures(1, texid+i);
     glBindTexture(GL_TEXTURE_2D, texid[i]);
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_SRGB8_ALPHA8, width, height);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA,
-        GL_UNSIGNED_BYTE, buf);
+    glCompressedTexImage2D(GL_TEXTURE_2D, 0,
+        // GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
+        GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT,
+        width, height, 0, 
+        16*((width+3)/4)*((height+3)/4), buf);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -712,6 +761,7 @@ uint32_t sx_vid_init_image(const char *filename, uint32_t *texid)
     free(buf);
     cnt++;
     // fprintf(stderr, "[vid] loading texture `%s'\n", fn);
+    if(!z) break;
   }
   return cnt;
 }
@@ -726,13 +776,13 @@ uint32_t sx_vid_init_image(const char *filename, uint32_t *texid)
 // F  : flip axes for opengl such that -z inside screen
 // R  : rotate to left and right cube sides if rendering fisheye
 // P  : projection matrix
-static inline void
-compute_mvp(
+void
+sx_vid_compute_mvp(
     float        *MVP,
     float        *MV,
     const int     u_cube_side,
-    const quat_t *q_model,
-    const float  *p_model,
+    const quat_t *q_model,   // orientation of model (model to world quaternion)
+    const float  *p_model,   // world space position of model coordinate system
     sx_camera_t  *cam,
     int c3model)
 {
@@ -754,18 +804,6 @@ compute_mvp(
   mat4_from_mat3(M, mat3, p_model);
 
   // V: world to view space
-#if 0
-  float T[16] = {0.0f}, Q[16], V[16];
-  quat_t vq = cam->q;
-  quat_conj(&vq);
-  quat_to_mat3(&vq, mat3);
-  mat4_from_mat3(Q, mat3, 0);
-  mat4_set_identity(T);
-  T[ 3] = -cam->x[0];
-  T[ 7] = -cam->x[1];
-  T[11] = -cam->x[2];
-  mat4_mul(Q, T, V);
-#else
   float c_pos[3] = {-cam->x[0], -cam->x[1], -cam->x[2]};
   quat_t vq = cam->q;
   quat_conj(&vq);
@@ -774,7 +812,6 @@ compute_mvp(
   float V[16];
   quat_to_mat3(&vq, mat3);
   mat4_from_mat3(V, mat3, c_pos);
-#endif
 
   float F[16] = {
     -1, 0,  0, 0,
@@ -793,12 +830,19 @@ compute_mvp(
     0, 1,  0, 0,
     s, 0,  c, 0,
     0, 0,  0, 1};
+  if(u_cube_side == -1) mat4_set_identity(R);
 
   // now scale to accomodate field of view:
   const float n = .10, f = 10000.0;
-  const float r = n*fabsf(s/c), l = -r;
+  const float r = u_cube_side >= 0 ?
+    n*fabsf(s/c) :
+    n*tan(cam->hfov*0.5),
+    l = -r;
   // need some leeway to not cut off corners:
-  const float t = 1.38 * n*tan(cam->vfov*0.5), b = -t;
+  const float t = u_cube_side >= 0 ?
+    1.38 * n*tan(cam->vfov*0.5) :
+    sx.height * r / sx.width, // n * tan(cam->vfov*0.5),
+    b = -t;
   float P[] = {
     2*n/(r-l), 0, (r+l)/(r-l), 0,
     0, 2*n/(t-b), (t+b)/(t-b), 0,
@@ -812,6 +856,54 @@ compute_mvp(
   mat4_mul(F, M, tmp);   // F * VMC3
   mat4_mul(R, tmp, MV);  // MV  = R * FVMC3
   mat4_mul(P, MV, MVP);  // MVP = P * RFVMC3
+}
+
+void
+sx_vid_push_geo_instance(
+    const uint32_t gi,
+    const float  *omp,
+    const quat_t *omq,
+    const float  *mp,
+    const quat_t *mq)
+{
+  if(gi < 0 || gi >= sx.vid.num_geo) return;
+  sx_geo_t *g = sx.vid.geo + gi;
+
+  if(g->instances > 1024) return;
+  int iid = g->instances++;
+  // specific to this geo/entity
+  float *MV  = g->instance_mat + 32*iid;
+  float *MVP = g->instance_mat + 32*iid + 16;
+  sx_vid_compute_mvp(MVP, MV, sx.vid.cube_side, mq, mp, &sx.cam, 1);
+}
+
+void
+sx_vid_render_instanced_geo(
+    const uint32_t gi)
+{
+  if(gi < 0 || gi >= sx.vid.num_geo) return;
+  sx_geo_t *g = sx.vid.geo + gi;
+
+  // all geo use this ubershader:
+  uint32_t program = sx.vid.program_hero;
+
+  // specific to this geo/entity
+  glUniform1ui(glGetUniformLocation(program, "u_instance_offset"), g->instance_offset);
+
+  // bind textures from geo material with given index
+  int tu = 0;
+  for(int m=0;m<g->num_mat;m++) if(g->mat[m].texu > tu)
+  {
+    tu = g->mat[m].texu; // only if not already bound by earlier material
+    uint32_t ti = (sx.time/250) % g->mat[m].tex_cnt;
+    if(g->mat[m].texid[ti] != -1)
+      glBindTextureUnit(g->mat[m].texu, g->mat[m].texid[ti]);
+  }
+
+  glBindTextureUnit(9, g->mat_tex);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, sx.vid.geo_instance_ssbo);
+  glBindVertexArray(g->vaid);
+  glDrawElementsInstanced(GL_TRIANGLES, g->num_idx, GL_UNSIGNED_INT, 0, g->instances);
 }
 
 void
@@ -830,7 +922,7 @@ sx_vid_render_geo(
 
   // specific to this geo/entity
   float MVP[16], MV[16];
-  compute_mvp(MVP, MV, sx.vid.cube_side, mq, mp, &sx.cam, 1);
+  sx_vid_compute_mvp(MVP, MV, sx.vid.cube_side, mq, mp, &sx.cam, 1);
   glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
   glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
@@ -845,15 +937,361 @@ sx_vid_render_geo(
   }
 
   glBindTextureUnit(9, g->mat_tex);
-
   glBindVertexArray(g->vaid);
   glDrawElements(GL_TRIANGLES, g->num_idx, GL_UNSIGNED_INT, 0);
+}
+
+// compute matrix from 3d flow texture space aligned with
+// model to world space position
+static inline void
+get_flow_matrix(
+    const quat_t *q,
+    const float  *p,
+    float        *M)
+{
+  // 3D texture around helicopter position to world space
+  // changing this has implications on flow.{comp,vert}
+  float wd = 80; // in meters: diameter around object
+  float x[][3] = { // u v w o
+    {wd, 0, 0},
+    {0, wd, 0},
+    {0, 0, wd},
+    {-wd/2, -wd/2, -wd/2},
+  };
+  for(int k=0;k<4;k++)
+  { // transform to world space
+    quat_transform(q, x[k]);
+    for(int i=0;i<3;i++) x[k][i] += p[i];
+  }
+  M[ 0] = x[0][0]; M[ 1] = x[1][0]; M[ 2] = x[2][0]; M[ 3] = x[3][0]; 
+  M[ 4] = x[0][1]; M[ 5] = x[1][1]; M[ 6] = x[2][1]; M[ 7] = x[3][1];
+  M[ 8] = x[0][2]; M[ 9] = x[1][2]; M[10] = x[2][2]; M[11] = x[3][2];
+  M[12] = 0;       M[13] = 0;       M[14] = 0;       M[15] = 1;
+}
+
+void sx_vid_render_frame_rect()
+{
+#if 0
+  // XXX this seems stupid beyond repair. maybe just run a fragment shader instead?
+  // execute air flow simulation compute shader
+  if(sx.vid.program_compute_flow != -1)
+  {
+    const sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
+    float Mp[16], Mc[16], MpI[16], M[16]; // model to world
+    get_flow_matrix(&ent->body.q, ent->body.c, Mc);
+    get_flow_matrix(&ent->prev_q, ent->prev_x, Mp);
+    mat4_inv(Mp, MpI);
+    mat4_mul(MpI, Mc, M);
+    // fprintf(stderr, "%g %g %g -> %g %g %g\n",
+    //     ent->body.c[0], ent->body.c[1], ent->body.c[2],
+    //     ent->prev_x[0], ent->prev_x[1], ent->prev_x[2]);
+
+    uint32_t program = sx.vid.program_compute_flow;
+    glUseProgram(program);
+    glUniformMatrix4fv(glGetUniformLocation(program, "u_mat"), 1, GL_TRUE, M);
+    // glUniformMatrix4fv(glGetUniformLocation(program, "u_curr"), 1, GL_TRUE, Mc);
+    glUniform1f(glGetUniformLocation(program, "u_alpha"), 0.5);
+    int c = sx.vid.tex_flow_curr;
+    int n = (c+1)%sx.vid.tex_flow_cnt;
+    glBindTextureUnit(0, sx.vid.tex_flow[c]);
+    // glBindTextureUnit(1, sx.vid.tex_flow[n]);
+    // glUniform1i(glGetUniformLocation(program, "new_flow"), 1);
+    glBindImageTexture(1, sx.vid.tex_flow[n], 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+    sx.vid.tex_flow_curr = n;
+#if 1
+    glDispatchCompute(2048/8, 1024/8, 1);//128/4, 128/4, 128/4);
+#else
+    glUniform2i(glGetUniformLocation(program, "u_res"), sx.width, sx.height);
+    glBindVertexArray(sx.vid.vao_empty);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 3);
+#endif
+    // mem barrier only needed before flow is drawn?
+    // glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT); // barrier for next reader
+    // glMemoryBarrier(GL_ALL_BARRIER_BITS);
+    // glFinish();
+    // glFlush();
+  }
+#endif
+
+  // glClearColor(0, 0, 0, 1);
+  // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  sx.vid.geo_instance_cnt = 0;
+
+  fbo_t *old_fbo = sx.vid.fbo == sx.vid.fbo0 ? sx.vid.fbo1 : sx.vid.fbo0;
+
+  // half angle of horizontal field of view. pi/2 means 180 degrees total
+  // and is the max we can get with only two cubemap sides
+
+  // rasterise geo before ray tracing
+  if(sx.vid.program_hero != -1)
+  {
+    // TODO: get from world
+    // float sunv[] = {-0.624695,0.468521,-0.624695};
+    // normalise(sunv);
+    // quat_transform_inv(&sx.cam.q, sunv); // sun in camera space
+
+    sx.vid.cube_side = -1;
+    fbo_bind(sx.vid.raster);
+    glClearColor(0, 0, 0, 0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+
+#if 1
+    // render terrain first and hope for early z out?
+    if(sx.vid.program_terrain != -1)
+    {
+      uint32_t program = sx.vid.program_terrain;
+      glUseProgram(program);
+      glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
+      glUniform1f(glGetUniformLocation(program, "u_lod"), 1);
+      glUniform2f(glGetUniformLocation(program, "u_res"), sx.width, sx.height);
+      glUniform1i(glGetUniformLocation(program, "u_frame"), sx.time);
+      glUniform3f(glGetUniformLocation(program, "u_pos_ws"),
+          sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
+      glUniform2f(glGetUniformLocation(program, "u_terrain_bounds"),
+          sx.world.terrain_low, sx.world.terrain_high);
+
+      // terrain comes in world space but centered at camera position
+      float MVP[16], MV[16];
+      quat_t mq;
+      quat_init_angle(&mq, 0, 1, 0, 0);
+      float mp[] = {sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]};
+      sx_vid_compute_mvp(MVP, MV, -1, &mq, mp, &sx.cam, 0);
+      glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
+      glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
+
+      // bind terrain textures:
+      glBindTextureUnit( 1, sx.vid.tex_terrain[0]); // colour
+      glBindTextureUnit( 2, sx.vid.tex_terrain[1]); // displacement
+      glBindTextureUnit( 3, sx.vid.tex_terrain[2]); // detail
+      glBindTextureUnit( 4, sx.vid.tex_terrain[3]); // char colour
+      glBindTextureUnit( 5, sx.vid.tex_terrain[4]); // char height
+      glBindTextureUnit( 6, sx.vid.tex_terrain[5]); // char material
+      glBindTextureUnit( 7, sx.vid.tex_terrain[6]); // displacement accel
+      glBindTextureUnit( 8, sx.vid.tex_terrain[7]); // char dis accel
+      glBindVertexArray(sx.vid.vao_terrain);
+      glPatchParameteri(GL_PATCH_VERTICES, 4);
+      glDrawElements(GL_PATCHES, sx.vid.terrain_idx_cnt*4, GL_UNSIGNED_INT, 0);
+    }
+
+    uint32_t program = sx.vid.program_hero;
+    glUseProgram(program);
+
+    // global uniforms:
+    // XXX mission -> world?
+    // glUniform3f(glGetUniformLocation(program, "u_sun"), sunv[0], sunv[1], sunv[2]);
+    glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
+    glUniform2f(glGetUniformLocation(program, "u_res"), sx.width, sx.height);
+    glUniform1i(glGetUniformLocation(program, "u_frame"), sx.time);
+    glUniform3f(glGetUniformLocation(program, "u_pos_ws"),
+        sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
+
+    // collect instances
+    for(int g=0;g<sx.vid.num_geo;g++)
+      sx.vid.geo[g].instances = 0;
+    for(int e=0;e<sx.world.num_entities;e++)
+      sx_world_render_entity(e);
+
+    // upload mvp matrices
+    int offset = 0;
+    for(int g=0;g<sx.vid.num_geo;g++)
+    {
+      if(sx.vid.geo[g].instances > 0)
+      {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, sx.vid.geo_instance_ssbo);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, 32*sizeof(float)*sx.vid.geo[g].instances, sx.vid.geo[g].instance_mat);
+        sx.vid.geo[g].instance_offset = offset / (32*sizeof(float));
+        offset += 32*sizeof(float)*sx.vid.geo[g].instances;
+      }
+    }
+    // actually draw
+    for(int g=0;g<sx.vid.num_geo;g++)
+      if(sx.vid.geo[g].instances > 0)
+        sx_vid_render_instanced_geo(g);
+
+    // draw debug force lines
+    if(sx.vid.program_debug_line != -1 && sx.vid.debug_line_cnt)
+    {
+      uint32_t program = sx.vid.program_debug_line;
+      glUseProgram(program);
+
+      const sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
+      // we have lines almost directly in world space (offset missing, rotation is there)
+      float MVP[16], MV[16];
+      quat_t mq;
+      quat_init_angle(&mq, 0, 1, 0, 0);
+      sx_vid_compute_mvp(MVP, MV, -1, &mq, ent->body.c, &sx.cam, 0);
+      glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
+      glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
+
+      glLineWidth(1.5f*sx.width/1024.0f);
+      glNamedBufferSubData(sx.vid.vbo_debug_line, 0, sizeof(sx.vid.debug_line_vx), sx.vid.debug_line_vx);
+      glBindVertexArray(sx.vid.vao_debug_line);
+      glDrawArrays(GL_LINES, 0, sx.vid.debug_line_cnt/6);
+    }
+#endif
+
+#if 0
+    if(sx.vid.program_debug_flow != -1)
+    {
+      uint32_t program = sx.vid.program_debug_flow;
+      glUseProgram(program);
+
+      // we have flow lines in model space (should be world space i guess?)
+      float MVP[16], MV[16];
+      sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
+
+      // float M[16], MI[16];
+      // get_flow_matrix(&ent->body.q, ent->body.c, M);
+      // mat4_inv(M, MI);
+      // glUniformMatrix4fv(glGetUniformLocation(program, "u_flow"), 1, GL_TRUE, MI);
+      // glUniform3f(glGetUniformLocation(program, "u_pos_ws"),
+      //     ent->body.c[0], ent->body.c[1], ent->body.c[2]);
+
+      sx_vid_compute_mvp(MVP, MV, -1, &ent->body.q, ent->body.c, &sx.cam, 0);
+      glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
+      glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
+      glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
+
+      glBindTextureUnit(0, sx.vid.tex_flow[sx.vid.tex_flow_curr]);
+      // glBindImageTexture(0, sx.vid.tex_flow[sx.vid.tex_flow_curr], 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA16F);
+      glLineWidth(2.5f*sx.width/1024.0f);
+      glBindVertexArray(sx.vid.vao_empty);
+      glDrawArrays(GL_LINES, 0, 40000);
+    }
+#endif
+
+    glDisable(GL_DEPTH_TEST);
+    fbo_unbind(sx.vid.raster);
+  }
+
+  if(sx.vid.program_draw_env != -1)
+  { // deep comp env with geo:
+    fbo_bind(sx.vid.fsb);
+    // glClearColor(0, 0, 0, 1);
+    // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // glEnable(GL_DEPTH_TEST);
+    uint32_t program = sx.vid.program_draw_env;
+    glUseProgram(program);
+
+    glUniform1f(glGetUniformLocation(program, "u_hfov"), sx.cam.hfov);
+    glUniform2f(glGetUniformLocation(program, "u_res"), sx.width, sx.height);
+    glUniform3f(glGetUniformLocation(program, "u_pos"),
+        sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
+    glUniform4f(glGetUniformLocation(program, "u_orient"),
+        sx.cam.q.x[0], sx.cam.q.x[1],
+        sx.cam.q.x[2], sx.cam.q.w);
+    glUniform2f(glGetUniformLocation(program, "u_terrain_bounds"),
+        sx.world.terrain_low, sx.world.terrain_high);
+
+    glBindTextureUnit(0, old_fbo->tex_color[0]);
+    glBindTextureUnit(1, sx.vid.raster->tex_color[0]);
+    glBindTextureUnit(2, sx.vid.raster->tex_color[1]);
+    glBindTextureUnit(3, sx.vid.raster->tex_depth);
+    glBindVertexArray(sx.vid.vao_empty);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 3);
+    // glDisable(GL_DEPTH_TEST);
+    fbo_unbind(sx.vid.fsb);
+  }
+
+  // FIXME: diffuse illumination now completely broken
+  // need to bind some other buffer, with only environment?
+  // glGenerateTextureMipmap(sx.vid.fsb->tex_color[0]);
+
+
+  // taa:
+  // read d->fsb and old_fbo and write to fbo
+  fbo_bind(sx.vid.fbo);
+  if(sx.vid.program_taa != -1)
+  { // do taa from two fbo to one output fbo
+    glUseProgram(sx.vid.program_taa);
+    GLint res = glGetUniformLocation(sx.vid.program_taa, "u_res");
+    glUniform2f(res, sx.vid.fbo->width, sx.vid.fbo->height);
+    glBindTextureUnit(0, old_fbo->tex_color[0]);
+    glBindTextureUnit(1, sx.vid.fsb->tex_color[0]); // current colour
+    glBindTextureUnit(2, sx.vid.fsb->tex_color[1]); // current motion
+    glBindVertexArray(sx.vid.vao_empty);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 3);
+  }
+  fbo_unbind(sx.vid.fbo);
+
+  // one more pass drawing just the hud frag shader and blitting to render buffer
+  if(sx.vid.program_grade != -1)
+  {
+    glUseProgram(sx.vid.program_grade);
+    glUniform3fv(glGetUniformLocation(sx.vid.program_grade, "u_col"), 1, sx.vid.hud.col);
+    glUniform3fv(glGetUniformLocation(sx.vid.program_grade, "u_flash_col"), 1, sx.vid.hud.flash_col);
+    glUniform1f(glGetUniformLocation(sx.vid.program_grade, "u_hfov"), sx.cam.hfov);
+    glUniform1f(glGetUniformLocation(sx.vid.program_grade, "u_vfov"), sx.cam.vfov);
+    GLint res = glGetUniformLocation(sx.vid.program_grade, "u_res");
+    glUniform2f(res, sx.vid.fbo->width, sx.vid.fbo->height);
+    GLint pos = glGetUniformLocation(sx.vid.program_grade, "u_pos");
+    glUniform3f(pos,
+        sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
+    GLint orient = glGetUniformLocation(sx.vid.program_grade, "u_orient");
+    glUniform4f(orient, // object to world
+        sx.cam.q.x[0], sx.cam.q.x[1],
+        sx.cam.q.x[2], sx.cam.q.w);
+    glBindTextureUnit(0, sx.vid.fbo->tex_color[0]);
+    // glBindTextureUnit(0, sx.vid.cube[0]->tex_color[0]); // XXX DEBUG cube map
+    // glBindTextureUnit(0, sx.vid.fsb->tex_color[0]); // XXX DEBUG no taa
+    // glBindTextureUnit(0, sx.vid.raster->tex_color[0]); // XXX DEBUG directly see geo
+    glBindVertexArray(sx.vid.vao_empty);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 3);
+  }
+
+  // draw hud lines
+  if(sx.vid.program_draw_hud != -1)
+  {
+    sx_hud_init(&sx.vid.hud, sx.world.player_move);
+    glLineWidth(1.5f*sx.width/1024.0f);
+    glUseProgram(sx.vid.program_draw_hud);
+    glUniform3fv(glGetUniformLocation(sx.vid.program_draw_hud, "u_col"), 1, sx.vid.hud.col);
+    glUniform3fv(glGetUniformLocation(sx.vid.program_draw_hud, "u_flash_col"), 1, sx.vid.hud.flash_col);
+    glUniform1ui(glGetUniformLocation(sx.vid.program_draw_hud, "u_flash_beg"), sx.vid.hud.flash_beg);
+    if(((int)(sx.time/500.0f))&1)
+      glUniform1ui(glGetUniformLocation(sx.vid.program_draw_hud, "u_flash_end"), sx.vid.hud.flash_end);
+    else
+      glUniform1ui(glGetUniformLocation(sx.vid.program_draw_hud, "u_flash_end"), sx.vid.hud.flash_beg);
+    glNamedBufferSubData(sx.vid.vbo_hud, 0, sizeof(sx.vid.hud.lines), sx.vid.hud.lines);
+    glBindVertexArray(sx.vid.vao_hud);
+    glDrawArrays(GL_LINES, 0, sx.vid.hud.num_lines);
+  }
+
+  // draw hud text
+  if(sx.vid.program_hud_text != -1)
+  {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glUseProgram(sx.vid.program_hud_text);
+    glUniform3fv(glGetUniformLocation(sx.vid.program_hud_text, "u_col"), 1, sx.vid.hud.col);
+    glUniform3fv(glGetUniformLocation(sx.vid.program_hud_text, "u_flash_col"), 1, sx.vid.hud.flash_col);
+    glUniform1ui(glGetUniformLocation(sx.vid.program_hud_text, "u_flash_beg"), sx.vid.hud.flash_text_beg*4);
+    if(((int)(sx.time/500.0f))&1)
+      glUniform1ui(glGetUniformLocation(sx.vid.program_hud_text, "u_flash_end"), sx.vid.hud.flash_text_end*4);
+    else
+      glUniform1ui(glGetUniformLocation(sx.vid.program_hud_text, "u_flash_end"), sx.vid.hud.flash_text_beg*4);
+    glNamedBufferSubData(sx.vid.vbo_hud_text[0], 0, sizeof(float)*sx.vid.hud_text_chars*8, sx.vid.hud_text_vx);
+    glNamedBufferSubData(sx.vid.vbo_hud_text[1], 0, sizeof(float)*sx.vid.hud_text_chars*8, sx.vid.hud_text_uv);
+    // glNamedBufferSubData(sx.vid.vbo_hud_text[2], 0, sx.vid.hud_text_chars*6, sx.vid.hud_text_id);
+    glBindTextureUnit(0, sx.vid.hud_text_font);
+    glBindVertexArray(sx.vid.vao_hud_text);
+    glDrawElements(GL_TRIANGLES, sx.vid.hud_text_chars*6, GL_UNSIGNED_INT, 0);
+    glDisable(GL_BLEND);
+  }
+
+  sx.vid.fbo = old_fbo;
+  SDL_GL_SwapWindow(sx.vid.window);
 }
 
 void sx_vid_render_frame()
 {
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  sx.vid.geo_instance_cnt = 0;
 
   fbo_t *old_fbo = sx.vid.fbo == sx.vid.fbo0 ? sx.vid.fbo1 : sx.vid.fbo0;
 
@@ -902,7 +1340,7 @@ void sx_vid_render_frame()
         quat_t mq;
         quat_init_angle(&mq, 0, 1, 0, 0);
         float mp[] = {sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]};
-        compute_mvp(MVP, MV, k, &mq, mp, &sx.cam, 0);
+        sx_vid_compute_mvp(MVP, MV, k, &mq, mp, &sx.cam, 0);
         glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
         glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
@@ -916,7 +1354,7 @@ void sx_vid_render_frame()
         glBindTextureUnit( 7, sx.vid.tex_terrain[6]); // displacement accel
         glBindTextureUnit( 8, sx.vid.tex_terrain[7]); // char dis accel
         glBindVertexArray(sx.vid.vao_terrain);
-        glDrawElements(GL_PATCHES, sx.vid.terrain_idx_cnt*3, GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_PATCHES, sx.vid.terrain_idx_cnt*4, GL_UNSIGNED_INT, 0);
       }
 
       uint32_t program = sx.vid.program_hero;
@@ -932,22 +1370,34 @@ void sx_vid_render_frame()
       glUniform3f(glGetUniformLocation(program, "u_pos_ws"),
           sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
 
-      // draw all entities from world which in turn draw their stuff
+      // collect instances
+      for(int g=0;g<sx.vid.num_geo;g++)
+        sx.vid.geo[g].instances = 0;
       for(int e=0;e<sx.world.num_entities;e++)
         sx_world_render_entity(e);
+
+      // upload mvp matrices
+      int offset = 0;
+      for(int g=0;g<sx.vid.num_geo;g++)
+      {
+        if(sx.vid.geo[g].instances > 0)
+        {
+          glBindBuffer(GL_SHADER_STORAGE_BUFFER, sx.vid.geo_instance_ssbo);
+          glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, 32*sizeof(float)*sx.vid.geo[g].instances, sx.vid.geo[g].instance_mat);
+          sx.vid.geo[g].instance_offset = offset / (32*sizeof(float));
+          offset += 32*sizeof(float)*sx.vid.geo[g].instances;
+        }
+      }
+      // actually draw
+      for(int g=0;g<sx.vid.num_geo;g++)
+        if(sx.vid.geo[g].instances > 0)
+          sx_vid_render_instanced_geo(g);
 
       // draw debug force lines
       if(sx.vid.program_debug_line != -1 && sx.vid.debug_line_cnt)
       {
         uint32_t program = sx.vid.program_debug_line;
         glUseProgram(program);
-        glUniform1i(glGetUniformLocation(program, "u_cube_side"), k);
-        glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
-        glUniform2f(glGetUniformLocation(program, "u_res"),
-            sx.vid.cube[k]->width, sx.vid.cube[k]->height);
-        glUniform1i(glGetUniformLocation(program, "u_frame"), sx.time);
-        glUniform3f(glGetUniformLocation(program, "u_pos_ws"),
-            sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
 
         // we have lines almost directly in world space
         float MVP[16], MV[16];
@@ -955,7 +1405,7 @@ void sx_vid_render_frame()
         quat_init_angle(&mq, 0, 1, 0, 0);
         sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
         float mp[] = {ent->body.c[0], ent->body.c[1], ent->body.c[2]};
-        compute_mvp(MVP, MV, k, &mq, mp, &sx.cam, 0);
+        sx_vid_compute_mvp(MVP, MV, k, &mq, mp, &sx.cam, 0);
         glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
         glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
@@ -1170,8 +1620,6 @@ int sx_vid_handle_input()
           break;
         case SDLK_F1:
           sx.cam.mode = s_cam_inside_cockpit;
-          sx.cam.hfov = 2.64;
-          sx.cam.vfov = sx.cam.hfov * sx.height/(float)sx.width;
           break;
         case SDLK_F2:
           sx.cam.mode = s_cam_inside_no_cockpit;
@@ -1300,10 +1748,10 @@ int sx_vid_handle_input()
           break;
         case 2:
           {
-          // remap to avoid dead zone on retarded thrustmaster T.Flight Hotas X
+          // // remap to avoid dead zone on retarded thrustmaster T.Flight Hotas X
           float t = event.jaxis.value/(float)0x7fff;
-          if(t > 0) t *= 0.5f; // overdrive
-          sx_heli_control_collective(sx.world.player_move, 1.0f + t);
+          // if(t > 0) t *= 0.5f; // overdrive
+          sx_heli_control_collective(sx.world.player_move, 0.5f + 0.5*t);
           break;
           }
         case 3:
@@ -1335,7 +1783,7 @@ int sx_vid_handle_input()
       switch(event.jbutton.button)
       {
         case 0: // pretend we have a cannon:
-          sx_sound_play(sx.assets.sound+sx.mission.snd_cannon);
+          sx_sound_play(sx.assets.sound+sx.mission.snd_cannon, -1);
           break;
         case 3:
           sx_heli_control_tail(sx.world.player_move, -1);

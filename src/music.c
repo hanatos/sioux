@@ -45,6 +45,7 @@ int sx_music_play(sx_music_t *m, int loops)
     {
       fprintf(stderr, "[music] failed to play music file %s!\n", m->filename);
       fprintf(stderr, "[music] reason: %s\n", Mix_GetError());
+      return 1;
     }
     fprintf(stderr, "[music] playing %s\n", m->filename);
     return 0;

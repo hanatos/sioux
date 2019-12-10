@@ -2,6 +2,8 @@
 #include "quat.h"
 #include "vid.h"
 #include "sx.h"
+#include "matrix4.h"
+#include "camera.h"
 
 static inline int
 line(float sx, float sy, float ex, float ey, float *lines)
@@ -166,12 +168,25 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
   for(int p=0;p<2;p++)
   {
     uint32_t curr_wp = sx.world.player_wp + p;
-    float wp[3] = { // waypoint in worldspace
+    float wp[4] = { // waypoint in worldspace
       sx.mission.waypoint[0][curr_wp][0],
       0.0f,
       sx.mission.waypoint[0][curr_wp][1],
+      1.0f,
     };
     wp[1] = sx_world_get_height(wp);
+
+#if 1
+    float MVP[16], MV[16], wph[4] = {0, 0, 0, 1};
+    quat_t nop;
+    quat_init(&nop, 0, 1, 0, 0);
+    sx_vid_compute_mvp(MVP, MV, -1, &nop, wp, &sx.cam, 0);
+    mat4_mulv(MVP, wph, wp);
+    if(wp[2] < 0) continue; // discard behind camera
+    for(int k=0;k<3;k++) wp[k] /= wp[3];
+    float x = wp[0];
+    float y = wp[1];
+#else
     // convert to camera space:
     for(int k=0;k<3;k++) wp[k] -= sx.cam.x[k];
     quat_transform_inv(&sx.cam.q, wp);
@@ -180,6 +195,7 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
     const float anglex = -atan2f(wp[2], wp[0])+M_PI/2.0f;
     float x = -2.f * anglex / sx.cam.hfov;
     float y =  2.f * angley / sx.cam.vfov;
+#endif
 
     // int i = waypoint_begin;
     hud->lines[2*i+0] = x;

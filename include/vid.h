@@ -27,7 +27,8 @@ int sx_vid_init_terrain(
     const char *ccol, const char *chgt, const char *cmat);
 
 void sx_vid_render_frame();
-void sx_vid_render_geo(const uint32_t gi,
+void sx_vid_render_frame_rect();
+void sx_vid_push_geo_instance(const uint32_t gi,
     const float *omvx, const quat_t *omvq,
     const float *mvx,  const quat_t *mvq);
 
@@ -39,4 +40,12 @@ int sx_vid_handle_input();
 uint32_t sx_vid_hud_text(const char *text, uint32_t bufpos, float x, float y, int center_x, int center_y);
 void sx_vid_hud_text_clear();
 
-
+typedef struct sx_camera_t sx_camera_t;
+void sx_vid_compute_mvp(
+    float        *MVP,
+    float        *MV,
+    const int     u_cube_side,
+    const quat_t *q_model,   // orientation of model (model to world quaternion)
+    const float  *p_model,   // world space position of model coordinate system
+    sx_camera_t  *cam,
+    int c3model);            // 1 if the model is a c3model (introduces more axis flips)

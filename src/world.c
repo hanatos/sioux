@@ -3,6 +3,7 @@
 #include "physics/heli.h"
 #include "pngio.h"
 #include "comanche.h"
+#include "plot/helo.h"
 
 #include <stdint.h>
 
@@ -83,25 +84,35 @@ sx_world_collide_terrain(
   const float ht = groundlevel + top;
 
   if(body->c[1] >= ht) return 0;
-  // fprintf(stderr, "bam! %g %g %g\n", body->c[1], groundlevel, ht);
-  // sound_play_random(rt.sound);
+
+  // fprintf(stderr, "bam! %g %g %g vv %g\n", body->c[1], groundlevel, ht, body->pv[1]);
+  if(e->move.damage) e->move.damage(e->move_data, 0, 0);
   // heavily dampen non-up orientation:
   body->c[1] = ht;
   e->prev_x[1] = ht;
 
-  // TODO: use normal of terrain
-  quat_t q0 = body->q;
-  quat_t q1;
-  quat_init(&q1, q0.w, 0.0f, q0.x[1], 0.0f);
-  quat_normalise(&q1);
-  // quat_slerp(&q0, &q1, 1-powf(1-.02f, dt/0.02f), &body->q);
-  body->q = q1;
-  // remove angular momentum and reduce speed
+  float n[3]; // normal of terrain
+  sx_world_get_normal(body->c, n);
+  float up[3] = {0, 1, 0}, rg[3];
+  quat_transform(&body->q, up); // to world space
+  float dt = dot(up, n);
+  cross(up, n, rg);
+  // detect degenerate case where |rg| <<
+  float len = dot(rg, rg);
+  if(len > 0.2)
+  {
+    quat_t q0 = body->q;
+    quat_t q1;
+    quat_init_angle(&q1, acosf(fminf(1.0, fmaxf(0.0, dt))), rg[0], rg[1], rg[2]);
+    quat_normalise(&q1);
+    quat_mul(&q1, &q0, &body->q);
+  }
+  // remove momentum
   for(int k=0;k<3;k++)
-    body->pv[k] = body->pw[k] = 0.0f;
-  // body->pv[0] *= .01f;
-  // body->pv[2] *= .013f;
-  // body->pv[1] = MAX(0.1*body->pv[1], .0f); // this is in object space, but we messed with orientation, too
+    body->pw[k] = 0.0f;
+  body->pv[1] = 0.0f;
+  body->pv[0] *= 0.5f;
+  body->pv[2] *= 0.5f;
   return 1;
 }
 
@@ -134,13 +145,33 @@ void sx_world_move(const uint32_t dt_milli)
   if(sx.cam.mode == s_cam_homing)
   {
     // x left; y up; z front;
-    // const float off[3] = {0, 2.3, -18};
-    const float off[3] = {3, 2.3, -18};
-    // const float off[3] = {-5, -.5, 10};
+    // float off[3] = {0, 2.3, -18};
+    float off[3] = {3, 2.3, -18};
+    // float off[3] = {-5, -.5, 10};
     const float *pos = sx.world.entity[sx.world.player_entity].body.c;
     const quat_t *q = &sx.world.entity[sx.world.player_entity].body.q;
     float wso[3] = {off[0], off[1], off[2]};
     quat_transform(q, wso); // convert object to world space
+    for(int k=0;k<3;k++) off[k] = pos[k] + wso[k];
+    float minh = 1.0f + sx_world_get_height(off);
+    if(wso[1] + pos[1] < minh) wso[1] = minh - pos[1];
+    sx_camera_target(&sx.cam, pos, q, wso, 0.03f, 0.03f);
+    sx_camera_lookat(&sx.cam, pos, 0.03f, 0.03f);
+  }
+  else if(sx.cam.mode == s_cam_rotate)
+  {
+    // x left; y up; z front;
+    float off[3] = {3, 2.0, -15};
+    quat_t rot;
+    quat_init_angle(&rot, sx.time*0.0001, 0, 1, 0);
+    quat_transform(&rot, off);
+    const float *pos = sx.world.entity[sx.world.player_entity].body.c;
+    const quat_t *q = &sx.world.entity[sx.world.player_entity].body.q;
+    float wso[3] = {off[0], off[1], off[2]};
+    quat_transform(q, wso); // convert object to world space
+    for(int k=0;k<3;k++) off[k] = pos[k] + wso[k];
+    float minh = 1.0f + sx_world_get_height(off);
+    if(wso[1] + pos[1] < minh) wso[1] = minh - pos[1];
     sx_camera_target(&sx.cam, pos, q, wso, 0.03f, 0.03f);
     sx_camera_lookat(&sx.cam, pos, 0.03f, 0.03f);
   }
@@ -150,7 +181,7 @@ void sx_world_move(const uint32_t dt_milli)
     const float *pos = sx.world.entity[sx.world.player_entity].body.c;
     const quat_t *q = &sx.world.entity[sx.world.player_entity].body.q;
     quat_t tmp = *q; // look down a bit
-    quat_t down; quat_init_angle(&down, 0.12f+sx.cam.angle_down, 1.0f, 0.0f, 0.0f);
+    quat_t down; quat_init_angle(&down, 0.15f+sx.cam.angle_down, 1.0f, 0.0f, 0.0f);
     quat_t right; quat_init_angle(&right, -sx.cam.angle_right, 0.0f, 1.0f, 0.0f);
     quat_mul(q, &down, &tmp);
     quat_mul(&tmp, &right, &down);
@@ -183,8 +214,8 @@ void sx_world_render_entity(uint32_t ei)
   uint32_t oi = sx.world.entity[ei].objectid;
   if(oi < 0 || oi >= sx.assets.num_objects) return;
 
-  // LOD: discard stuff > 1k
-  float d[3], md = 1000;
+  // LOD: discard stuff > 2km
+  float d[3], md = 2000;
   for(int k=0;k<3;k++) d[k] = sx.world.entity[ei].body.c[k] - sx.cam.x[k];
   if(dot(d, d) > md*md) return;
 
@@ -201,6 +232,10 @@ void sx_world_render_entity(uint32_t ei)
     // this one also knows the center of mass vs. zero in model coordinates
     // TODO: other move for other helis
     return sx_coma_render(ei, sx.world.player_move);
+  }
+  if(!strncmp(dr, "helo", 4))
+  {
+    return sx_plot_helo(ei);
   }
 
   // fprintf(stderr, "rendering entity oid: %u/%u\n", oi, sx.assets.num_objects);
@@ -220,7 +255,7 @@ void sx_world_render_entity(uint32_t ei)
   int geo_end = MAX(geo_beg+1, obj->geo_g + obj->geo_m);
 
   for(int g=geo_beg;g<geo_end;g++)
-    sx_vid_render_geo(obj->geoid[g], omp, omq, mp, mq);
+    sx_vid_push_geo_instance(obj->geoid[g], omp, omq, mp, mq);
 }
 
 float
@@ -238,8 +273,17 @@ sx_world_get_height(
 void
 sx_world_get_normal(const float *p, float *n)
 {
-  // TODO: use 4x get_height and a cross product
-
+  float dx = 1.1f;
+  float x0[] = {p[0], p[1], p[2]};
+  float h0 = sx_world_get_height(x0);
+  float x1[] = {p[0]+dx, p[1], p[2]};
+  float h1 = sx_world_get_height(x1);
+  float x2[] = {p[0], p[1], p[2]+dx};
+  float h2 = sx_world_get_height(x2);
+  float u[] = {  dx, h1 - h0, 0.0f};
+  float v[] = {0.0f, h2 - h0, dx};
+  cross(v, u, n);
+  normalise(n);
 }
 
 void
@@ -255,6 +299,7 @@ sx_world_remove_entity(
 uint32_t
 sx_world_add_entity(
     uint32_t objectid,   // 3d model to link to
+    uint32_t dead_oid,   // object of destroyed entity
     float *p,            // position
     quat_t *q,           // orientation
     char id,             // mission relevant id
@@ -268,8 +313,10 @@ sx_world_add_entity(
 
   // geometry stuff:
   sx.world.entity[eid].objectid = objectid;
+  sx.world.entity[eid].dead_objectid = dead_oid;
   sx.world.entity[eid].id = id;
   sx.world.entity[eid].camp = camp;
+  sx.world.entity[eid].hitpoints = sx.assets.object[objectid].hitpoints;
   // offset by bounding box of object (found in header).
   // note that the objects have a z-up system:
   if(ground)

@@ -6,7 +6,7 @@
 
 // model is in x left, y back, z top space
 
-// list of parts, from player.ai (there are variants of this list)
+// list of parts, from player.ai (there are variants of this list cm[abc]h)
 // cmah_bod.3do  // main body
 // cmah_bl1.3do  // blade 1, static
 // cmah_bl2.3do  // blade 2, in flight (needs transparent texture)
@@ -32,6 +32,14 @@
 // cmah_box.3do  // joint between gun and below the cockpit
 // coma_l.3do    // very low detail version, let's ignore this
 
+
+
+// deadcoma.ai: (x0)
+// deadefam.ai: (x)
+// com[abc]x[0]_h.3do // dead version with (x0) or without (x) extra rockets at the side
+// fire.ai:
+// flames.3do         // fire inside dead comanche
+
 static const char *com_part_name[] =
 {
   "bod", "bl1", "bl2", "rtr", "int", "ldr", "ldl", "ldk", "mdr", "mdl",
@@ -46,7 +54,7 @@ static const int com_part_count = sizeof(com_part_name)/sizeof(com_part_name[0])
 // door.kda   // flaps open?
 // rotor.kda  // rear rotor?
 // gear.kda   // retract/expand gear?
-// thunk.ka   // hit obstackle/terrain
+// thunk.ka   // hit obstacle/terrain
 
 
 // hardcoded offsets of all parts to match body of comanche
@@ -145,7 +153,9 @@ sx_coma_render(uint32_t ei, sx_heli_t *h)
   if(h->ctl.flap == 0.0f) h->ctl.flap_move = 0; // not really needed i guess
 #endif
   sx_entity_t *ent = sx.world.entity + ei;
-  uint32_t oi = sx.world.entity[ei].objectid;
+  uint32_t oi = sx.world.entity[ei].hitpoints <= 0.0 ?
+    sx.world.entity[ei].dead_objectid :
+    sx.world.entity[ei].objectid;
   sx_object_t *obj = sx.assets.object + oi;
 
   // 0) apply rotation rq and model coordinate offset (center of mass to object rotation center, vo)
@@ -161,8 +171,9 @@ sx_coma_render(uint32_t ei, sx_heli_t *h)
   int geo_beg = obj->geo_g + obj->geo_h;
   int geo_end = MAX(geo_beg+1, obj->geo_g + obj->geo_m);
 
-  for(int g=geo_beg;g<geo_end;g++)
+  for(int gg=geo_beg;gg<geo_end;gg++)
   {
+    int g = gg - geo_beg;
     if(g==1) continue; // skip static rotor
     if(g==18) continue; // no extra weapons on side
     // TODO: special treatment: if bl2 (main rotor in motion), push vertices up depending on cyclic!
@@ -200,20 +211,9 @@ sx_coma_render(uint32_t ei, sx_heli_t *h)
       ent->body.c[2]+vo[2]};
     quat_t mq;
     quat_mul(bq, &rq, &mq);
-#if 0
-    float mvx[3] = {
-      ent->body.c[0]-sx.cam.x[0]+vo[0],
-      ent->body.c[1]-sx.cam.x[1]+vo[1],
-      ent->body.c[2]-sx.cam.x[2]+vo[2]};
-    quat_t ivq = sx.cam.q;
-    quat_conj(&ivq);
-    quat_transform(&ivq, mvx);
-    quat_t tmp, mvq;
-    quat_mul(&ivq, mq, &tmp);
-    quat_mul(&tmp, &rq, &mvq);
-#endif
 
     // for motion vectors, previous frame:
+    // XXX TODO: old float anim = sx.time;
     const quat_t *omq = &ent->prev_q;
     quat_t orq;
     if(com_part_rot[g][0] != 0.0f)
@@ -237,8 +237,7 @@ sx_coma_render(uint32_t ei, sx_heli_t *h)
     quat_mul(&iovq, omq, &otmp);
     quat_mul(&otmp, &orq, &omvq);
 
-    // XXX TODO: consider transformation/rotation!
-    sx_vid_render_geo(obj->geoid[g], mp, &mq, mp, &mq);
+    sx_vid_push_geo_instance(obj->geoid[gg], mp, &mq, mp, &mq);
   }
 }
 

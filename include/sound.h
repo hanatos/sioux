@@ -17,6 +17,6 @@ int sx_sound_init(sx_sound_t *s, const char *filename);
 
 void sx_sound_cleaunp(sx_sound_t *s);
 
-int sx_sound_play(sx_sound_t *s);
+int sx_sound_play(sx_sound_t *s, int channel);
 int sx_sound_loop(sx_sound_t *s, int channel, int count);
 int sx_sound_stop_loop(int channel);

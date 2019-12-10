@@ -2,8 +2,8 @@
 #include "assets.h"
 #include "sx.h"
 
-// #define triggers_printf fprintf
-#define triggers_printf(...)
+#define triggers_printf fprintf
+// #define triggers_printf(...)
 
 static uint32_t
 c3_triggers_identifier_to_int(
@@ -38,7 +38,7 @@ c3_triggers_int_to_pos(uint32_t id, float *pos)
   if(id > 0xff)
   { // two char identifier
     char c0 = id&0xff, c1 = id >> 8;
-    if(c0 == 'W')
+    if(c0 == 'W' || c0 == 'J')
     { // coordinates of some object
       // TODO: need to find shortest/largest distance here? this just returns the first of the group we find
       // TODO: use some smarter way of doing this:
@@ -175,17 +175,18 @@ c3_triggers_action(
       // TODO: maybe rules delete themselves once triggered? or only sounds?
       triggers_printf(stderr, "action play sound %u\n", arg0);
       if(arg0 < 0 || arg0 > sx.assets.num_sounds) return;
-      sx_sound_play(sx.assets.sound+arg0);
+      sx_sound_play(sx.assets.sound+arg0, 0);
       break;
     case C3_ACT_VAPORIZE:     // vaporize, <object> ???
       break;
     case C3_ACT_WIN:          // mission won
-      c3_triggers_parse_music(filename, mis->music, C3_COND_WIN, 'f');
+      // TODO: set gamestate and let world/mission do it's thing
+      c3_triggers_parse_music(filename, mis->music, C3_GAMESTATE_WIN, 'f');
       sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), -1);
       break;
     case C3_ACT_CLEARCOUNTER: // restart from 1
       triggers_printf(stderr, "resetting counter\n");
-      mis->counter = 1;
+      mis->counter = 0;
       break;
     default: // nothing happens
       break;
@@ -209,7 +210,7 @@ c3_triggers_check_cond(
         for(int k=0;k<3;k++)
           pos[k] -= sx.world.entity[sx.world.player_entity].body.c[k];
         // triggers_printf(stderr, "distance to waypoint %c%c : %g\n", arg1&0xff, arg1>>8, sqrtf(dot(pos,pos)/2.0f));
-        return sqrtf(dot(pos,pos)) < ft2m(2*arg0);
+        return sqrtf(dot(pos,pos)) < ft2m(2*arg0); // or maybe it was in yards?
       }
     case C3_COND_FARTHER:    // farther, <distance>, <object>
       {
@@ -221,24 +222,32 @@ c3_triggers_check_cond(
         return sqrtf(dot(pos,pos)) > ft2m(2*arg0);
       }
     case C3_COND_ALIVE:      // alive, <object>
-      if(arg0 == 'P') return 1; // for now we are always alive
+      if(arg0 == 'P') return sx.world.entity[sx.world.player_entity].hitpoints > 0.0;
       return 0;
     case C3_COND_KILLED:     // killed, <object>, <num>
+      return 0;
+    case C3_COND_DESTROYED:
+      if(arg0 == 'P') return sx.world.entity[sx.world.player_entity].hitpoints <= 0.0;
+      // TODO: check other ids
       return 0;
     case C3_COND_BELOW:      // below, <altitude>
       return m2ft(sx_heli_alt_above_ground(sx.world.player_move)) < arg0;
     case C3_COND_ABOVE:      // above, <altitude>
-      // trigger_printf(stderr, "checking above %g %d\n",
-      // sx_heli_alt_above_ground(sx.world.player_move)/5.0f, arg0);
+      // triggers_printf(stderr, "checking above %g %d\n",
+      // m2ft(sx_heli_alt_above_ground(sx.world.player_move)), arg0);
       return m2ft(sx_heli_alt_above_ground(sx.world.player_move)) > arg0;
     case C3_COND_COUNTER:    // counter, <value>
-      return mis->counter == arg0;
+      return mis->counter >= arg0;
     case C3_COND_TIME:       // time, <value>
-      return mis->time == arg0;
+      return mis->time >= arg0;
     case C3_COND_WAYPOINT:   // waypoint, <object>, <waypoint id>
+      if(arg0 == 'P') return ((arg1&0xff)=='A') &&
+        ((arg1>>8)=='1' + sx.world.player_wp-1) &&
+         (sx.world.player_old_wp != sx.world.player_wp);
       return 0;
     case C3_COND_DAMAGE:     // damage, <num>
-      return 0;
+      // TODO: return if hitpoints >= num
+      return 1;
     case C3_COND_FACES:      // faces, <object/waypoint id>  // maybe looking at it?
       return 0;
     case C3_COND_WEAPON:
@@ -328,8 +337,8 @@ char* c3_triggers_parse_music(char* filename, char letter, int gamestate, char f
   else if(isdigit(letter) != 0 && letter != 0)
     filename[i++] = 'n';
 
-  if(isalpha(letter) != 0 && (gamestate == C3_COND_WIN || gamestate == C3_COND_LOSE))
-    gamestate = C3_COND_LOSE_WIN;
+  if(isalpha(letter) != 0 && (gamestate == C3_GAMESTATE_WIN || gamestate == C3_GAMESTATE_LOSE))
+    gamestate = C3_GAMESTATE_LOSE_WIN;
 
   strncpy(&filename[i], c3_condition_midi_text[gamestate], 11);
 

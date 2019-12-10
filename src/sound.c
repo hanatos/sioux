@@ -45,10 +45,11 @@ sx_sound_cleaunp(
 
 int
 sx_sound_play(
-    sx_sound_t *s)
+    sx_sound_t *s,
+    int channel)
 {
   // fprintf(stderr, "[sound] playing %s\n", s->filename);
-  Mix_PlayChannel(-1, s->chunk, 0);
+  Mix_PlayChannel(channel, s->chunk, 0);
   return 0;
 }
 

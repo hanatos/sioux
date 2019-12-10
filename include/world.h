@@ -10,9 +10,10 @@ typedef struct sx_entity_t
 {
   // rigid body can be applied forces (need to transform to local space)
   sx_rigid_body_t body;
-  uint32_t objectid;  // references into assets
-  sx_move_t move;     // movement controller with callbacks
-  void *move_data;    // dynamically allocated movement controller data
+  uint32_t objectid;      // references into assets
+  uint32_t dead_objectid; // this is the object if the entity was destroyed
+  sx_move_t move;         // movement controller with callbacks
+  void *move_data;        // dynamically allocated movement controller data
 
   // previous position and alignment
   quat_t prev_q;
@@ -55,7 +56,10 @@ typedef struct sx_world_t
   uint32_t player_entity;
   sx_heli_t *player_move;  // TODO: have one for every entity with a given move routine
   uint32_t player_wp;      // index of next waypoint (in mission or here?)
+  uint32_t player_old_wp;
   uint32_t player_weapon;
+
+  uint32_t fire_entity;    // broken stuff burns
 }
 sx_world_t;
 
@@ -76,6 +80,7 @@ void sx_world_remove_entity(uint32_t ei);
 // TODO: probably needs /a lot/ of amending
 uint32_t sx_world_add_entity(
     uint32_t objectid,
+    uint32_t dead_objectid,
     float *pos, quat_t *q,
     char id, uint8_t camp, uint32_t ground);
 

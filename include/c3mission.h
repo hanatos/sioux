@@ -70,6 +70,9 @@ typedef struct c3_mission_t
   uint32_t snd_warn_lock;
   uint32_t snd_warn_torque;
   uint32_t snd_cannon;
+
+  uint32_t snd_fire;
+  uint32_t snd_hit;
 }
 c3_mission_t;
 

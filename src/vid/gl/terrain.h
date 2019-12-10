@@ -16,7 +16,7 @@ sx_vid_gl_terrain_init(
   // number of vertices
   int num = wd * wd;
   float *v = malloc(sizeof(float)*3*num);
-  uint32_t *idx = malloc(sizeof(uint32_t)*3*2*num);
+  uint32_t *idx = malloc(sizeof(uint32_t)*4*num);
 
   // build a LOD structure from the camera coordinate at 0,0,0.
   // we'll refine this using tesselation shaders on the GPU later on.
@@ -58,25 +58,27 @@ sx_vid_gl_terrain_init(
       num_vtx++;
       // fprintf(f, "v %g %g %g\n", x, y, z);
       
-      // emit two triangles
+      // emit quad
       if(i && j)
       {
-        idx[3*num_p+0] = wd*(j-1) + i-1;
-        idx[3*num_p+1] = wd*(j  ) + i  ;
-        idx[3*num_p+2] = wd*(j  ) + i-1;
+        idx[4*num_p+0] = wd*(j-1) + i-1;
+        idx[4*num_p+1] = wd*(j-1) + i;
+        idx[4*num_p+2] = wd*(j  ) + i;
+        idx[4*num_p+3] = wd*(j  ) + i-1;
+        // fprintf(f, "f %d %d %d %d\n",
+            // idx[4*num_p+0]+1,
+            // idx[4*num_p+1]+1,
+            // idx[4*num_p+2]+1,
+            // idx[4*num_p+3]+1);
+        num_p++;
+        // idx[3*num_p+0] = wd*(j-1) + i-1;
+        // idx[3*num_p+1] = wd*(j-1) + i;
+        // idx[3*num_p+2] = wd*(j  ) + i;
         // fprintf(f, "f %d %d %d\n",
         //     idx[3*num_p+0]+1,
         //     idx[3*num_p+1]+1,
         //     idx[3*num_p+2]+1);
-        num_p++;
-        idx[3*num_p+0] = wd*(j-1) + i-1;
-        idx[3*num_p+1] = wd*(j-1) + i;
-        idx[3*num_p+2] = wd*(j  ) + i;
-        // fprintf(f, "f %d %d %d\n",
-        //     idx[3*num_p+0]+1,
-        //     idx[3*num_p+1]+1,
-        //     idx[3*num_p+2]+1);
-        num_p++;
+        // num_p++;
       }
     }
   }
@@ -86,8 +88,3 @@ sx_vid_gl_terrain_init(
   *out_num_p = num_p;
   // fclose(f);
 }
-
-// TODO: submit this geo as GL_PATCH (or let's try triangles first and see whether we can see something at all)
-// TODO: need a camera-space vertex shader
-// TODO: provide tessellation control and tessellation evaluation shaders
-// TODO: add in some procedural detail?

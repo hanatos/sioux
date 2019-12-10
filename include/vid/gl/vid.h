@@ -19,7 +19,7 @@ sx_material_t;
 
 typedef struct sx_geo_t
 {
-  GLuint vbo[4];    // vertices, normals, uvs, indices
+  GLuint vbo[4];      // vertices, normals, uvs, indices
   GLuint vaid;
   uint32_t num_vtx;
   uint32_t num_nor;
@@ -30,6 +30,10 @@ typedef struct sx_geo_t
   GLuint mat_tex;
   sx_material_t mat[128];
   char filename[32];
+
+  uint32_t instance_offset; // offset into ssbo of instanced matrices
+  uint32_t instances;
+  float    instance_mat[32*1024]; // enough for 1024 instances
 }
 sx_geo_t;
 
@@ -42,7 +46,9 @@ typedef struct sx_vid_t
   uint32_t program_blit_texture, program_draw_texture,
            program_taa, vao_empty, program_grade, program_hero,
            program_draw_hud, program_hud_text,
-           program_debug_line, program_terrain;
+           program_debug_line, program_terrain,
+           program_draw_env, program_debug_flow,
+           program_compute_flow;
 
   uint32_t vao_hud, vbo_hud;
   sx_hud_t hud;
@@ -72,8 +78,20 @@ typedef struct sx_vid_t
   uint32_t num_geo;
   sx_geo_t geo[2048];
 
+  // TODO: can we get away with one streamed buffer? don't we need to put all matrices in a row first by
+  // TODO: querying the entities? i suppose we need this one here, fill it with all matrices, keep an offset
+  // buffer per geo, and then stream to ssbo/set the offset as uniform
+  uint32_t  geo_instance_cnt;
+  uint32_t *geo_instance_id;
+  float    *geo_instance_mat;
+  uint32_t  geo_instance_ssbo;
+
   // terrain textures and "character" detail textures:
   uint32_t tex_terrain[8];   // col, dis, mat, ccol, cdis, cmat, acc, cacc
+
+  uint32_t tex_flow_cnt;
+  uint32_t tex_flow_curr;
+  uint32_t tex_flow[2];
 
   // TODO: 
   uint32_t tex_skypal, tex_clouds;

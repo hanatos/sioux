@@ -1,4 +1,4 @@
-CC?=gcc
+CC=gcc
 CFLAGS=-Wall -std=c11
 CFLAGS+=-Iinclude -I.
 CFLAGS+=-g -O3 -march=native
@@ -7,10 +7,12 @@ LDFLAGS=-lm
 LDFLAGS+=$(shell pkg-config --libs libpng)
 CFLAGS+=$(shell pkg-config --cflags libpng)
 
-SDL_L+=-lSDL2 -lSDL2_mixer $(shell pkg-config --libs glew)
-SDL_C+=-I/usr/include/SDL2 $(shell pkg-config --cflags glew)
+SDL_L+=$(shell pkg-config --libs sdl2) $(shell pkg-config --libs glew)
+SDL_C+=$(shell pkg-config --cflags sdl2) $(shell pkg-config --cflags glew)
+SDL_L+=$(shell pkg-config --libs SDL2_mixer)
+SDL_C+=$(shell pkg-config --cflags SDL2_mixer)
 
-all: pcx model anim sx
+all: pcx model anim sx png2bc3
 
 sanitize: CFLAGS+=-fno-omit-frame-pointer -fsanitize=address
 sanitize: all
@@ -20,6 +22,7 @@ debug: all
 
 # TODO: separate into useful subdirs?
 HEADERS=include/assets.h\
+        include/bc3io.h\
         include/camera.h\
         include/comanche.h\
         include/c3mission.h\
@@ -38,6 +41,7 @@ HEADERS=include/assets.h\
         include/physics/rigidbody.h\
         include/physics/aerofoil.h\
         include/physics/heli.h\
+        include/plot/helo.h\
         include/world.h\
         include/triggers.h
 
@@ -57,7 +61,10 @@ SX_FILES=src/sx.c\
 HEADERS+=include/vid/gl/vid.h src/vid/gl/terrain.h
 SX_FILES+= src/vid/gl/vid.c
 
-pcx: tools/pcx.c Makefile include/decompress.h include/file.h include/pngio.h include/pcxread.h
+pcx: tools/pcx.c Makefile include/decompress.h include/file.h include/pngio.h include/bc3io.h include/pcxread.h
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+png2bc3: tools/png2bc3.c Makefile include/file.h include/pngio.h include/bc3io.h
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
 model: tools/model.c include/file.h include/c3model.h Makefile

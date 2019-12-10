@@ -59,18 +59,64 @@ uint32_t c3_object_load(sx_object_t *o, const char *filename)
   //     o->aabb[0], o->aabb[1], o->aabb[2],
   //     o->aabb[3], o->aabb[4], o->aabb[5]);
   // read plot routines and geo offset, ignore fading distance
-  if(file_readline(f, line)) return 1;
+  if(file_readline(f, line)) goto fail;
   sscanf(line, "%4[^,],%d", o->draw, &o->geo_h);
-  if(file_readline(f, line)) return 1;
+  if(file_readline(f, line)) goto fail;
   sscanf(line, "%4[^,],%d", o->dram, &o->geo_m);
-  if(file_readline(f, line)) return 1;
+  if(file_readline(f, line)) goto fail;
   sscanf(line, "%4[^,],%d", o->dral, &o->geo_l);
   // read movement
-  if(file_readline(f, line)) return 1;
+  if(file_readline(f, line)) goto fail;
   memcpy(o->move, line, 4);
-  // <
+  // need to skip to '<' because there is an optional block:
+  // 4       ;rate
+  // 1       ;control registers *
+  // 4       ;number of frames
+  // (see fire.ai, i think we handle this by animated textures already)
   // read extra flags, hitpoints, printable name for radar?
   // <
+  // 1       ;Collidable
+  // 0       ;Missile / Projectile
+  // 0       ;Landable - You can land on the top of this object
+  // 
+  // 1       ;Good Team - Bad Target
+  // 0       ;Bad Team - Good Target
+  // 1       ;High Priority Target - Friendly Fire System
+  // 1       ;Air
+  // 
+  // 20      ;hit points
+  // 3       ;(0=UNK,1=TaNK,2=AIR,3=COPter,4=GUN,5=MiSsiLe)
+  // RAH-66
+  // <
+  while(1)
+  {
+    if(file_readline(f, line)) goto fail;
+    if(line[0] == '<') break; // found '<'
+  }
+  if(file_readline(f, line)) goto fail;
+  sscanf(line, "%d", &o->collidable);
+  if(file_readline(f, line)) goto fail;
+  sscanf(line, "%d", &o->projectile);
+  if(file_readline(f, line)) goto fail;
+  sscanf(line, "%d", &o->landable);
+  if(file_readline(f, line)) goto fail;
+  sscanf(line, "%d", &o->good_team_bad_target);
+  if(file_readline(f, line)) goto fail;
+  sscanf(line, "%d", &o->bad_team_good_target);
+  if(file_readline(f, line)) goto fail;
+  sscanf(line, "%d", &o->high_priority_target);
+  if(file_readline(f, line)) goto fail;
+  sscanf(line, "%d", &o->goal);
+  if(file_readline(f, line)) goto fail;
+  sscanf(line, "%g", &o->hitpoints);
+  if(file_readline(f, line)) goto fail;
+  sscanf(line, "%d", &o->type);
+  if(file_readline(f, line)) goto fail;
+  sscanf(line, "%s", o->description);
+
   fclose(f);
   return 0;
+fail:
+  fclose(f);
+  return 1;
 }

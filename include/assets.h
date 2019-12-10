@@ -40,7 +40,7 @@ sx_music_t* sx_assets_filename_to_music(
     sx_assets_t* a,
     const char* filename);
 
-// returns handle and dedupes
+// returns handle, does not dedup (need to keep index for pos files)
 // use lower case file names
 // loads .ai files
 uint32_t sx_assets_load_object(

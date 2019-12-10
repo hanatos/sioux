@@ -233,11 +233,39 @@ float sx_heli_groundlevel(const sx_rigid_body_t *b)
 
 float sx_heli_alt_above_ground(const sx_heli_t *h)
 {
-  return h->entity->body.c[1] - sx_heli_groundlevel(&h->entity->body);
+  // interested in height of gear above ground:
+  return h->entity->body.c[1] - sx_heli_groundlevel(&h->entity->body) - 2.09178;
 }
 
 // TODO: will need replacement
-void sx_heli_damage(void *h, float x[3], float p[3]) {}
+void sx_heli_damage(void *hv, float x[3], float p[3])
+{
+  sx_heli_t *h = hv;
+  float impulse = sqrtf(dot(h->entity->body.pv, h->entity->body.pv));
+  if(impulse > 15000.0) // impulse in meters/second * kg
+  {
+    // TODO: more selective damage
+    if(h->ctl.gear == 1)
+    {
+      if(impulse > 100000.0)
+      {
+        sx_sound_play(sx.assets.sound + sx.mission.snd_hit, -1);
+        h->entity->hitpoints -= 20; // TODO: damage gear
+      }
+    }
+    else
+    {
+      sx_sound_play(sx.assets.sound + sx.mission.snd_hit, -1);
+      h->entity->hitpoints -= 5;
+      if(impulse > 50000.0)
+        h->entity->hitpoints -= 100;
+    }
+  }
+  // TODO: lose trigger
+  // died
+  if(h->entity->hitpoints <= 0.0)
+    sx.cam.mode = s_cam_rotate;
+}
 
 void sx_heli_update_forces(void *hvoid, sx_rigid_body_t *b)
 {
@@ -340,10 +368,12 @@ void sx_heli_update_forces(void *hvoid, sx_rigid_body_t *b)
   for(int i=0;i<s_heli_surf_cnt;i++)
     sx_aerofoil_apply_forces(h->surf+i, b, wind);
 
-  sx_rigid_body_apply_torque(b, main_rotor_torque);
-
   sx_rigid_body_apply_force(b, h->act+s_act_gravity);
-  sx_rigid_body_apply_force(b, h->act+s_act_cyclic);
+  if(h->entity->hitpoints > 0.)
+  {
+    sx_rigid_body_apply_torque(b, main_rotor_torque);
+    sx_rigid_body_apply_force(b, h->act+s_act_cyclic);
+  }
   sx_rigid_body_apply_force(b, h->act+s_act_tail);
   sx_rigid_body_apply_force(b, h->act+s_act_drag);
 }
