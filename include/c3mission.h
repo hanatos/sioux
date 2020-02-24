@@ -63,6 +63,7 @@ typedef struct c3_mission_t
   c3_trigger_t trigger[1000];
   uint32_t counter;
   uint32_t time;
+  c3_gamestate_t gamestate;
 
   // global sounds for the hero comanche:
   uint32_t snd_engine;
@@ -73,6 +74,18 @@ typedef struct c3_mission_t
 
   uint32_t snd_fire;
   uint32_t snd_hit;
+  uint32_t snd_explode;
+
+  // global dynamic obj for dynamic spawning
+  uint32_t obj_fire;
+  uint32_t obj_explosion_air;
+  uint32_t obj_explosion_dirt;
+  uint32_t obj_explosion_nuke;
+  uint32_t obj_debris;
+  uint32_t obj_rocket;
+  uint32_t obj_stinger;
+  uint32_t obj_hellfire;
+  uint32_t obj_bullet;
 }
 c3_mission_t;
 

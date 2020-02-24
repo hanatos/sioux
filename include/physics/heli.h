@@ -130,7 +130,7 @@ static inline void sx_heli_control_flap(sx_heli_t *h)
   if(h->ctl.flap_move <= 0 && h->ctl.flap == 0.0f) h->ctl.flap_move =  1;
 }
 
-void sx_heli_update_forces(void *h, sx_rigid_body_t *b);
+void sx_heli_update_forces(sx_entity_t *e, sx_rigid_body_t *b);
 
 // damage the helicopter by given impulse p and hit point x (TODO: model or world space?)
-void sx_heli_damage(void *h, float x[3], float p[3]);
+void sx_heli_damage(sx_entity_t *e, float x[3], float p[3]);

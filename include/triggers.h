@@ -74,6 +74,7 @@ static const char *c3_condition_text[] =
   "nearer",
   "farther",
   "alive",
+  "intact",
   "killed",
   "destroyed",
   "below",

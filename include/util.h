@@ -122,3 +122,24 @@ static inline float ms2knots(float v)
 { // nautical miles per hour
   return 60.0f*60.0f/1852.0f * v;
 }
+
+// tiny encryption algorithm random numbers
+static inline void
+encrypt_tea(uint32_t arg[], float rand[])
+{
+  const uint32_t key[] = {
+    0xa341316c, 0xc8013ea4, 0xad90777d, 0x7e95761e
+  };
+  uint32_t v0 = arg[0], v1 = arg[1];
+  uint32_t sum = 0;
+  uint32_t delta = 0x9e3779b9;
+
+  for(int i = 0; i < 16; i++) {
+    sum += delta;
+    v0 += ((v1 << 4) + key[0]) ^ (v1 + sum) ^ ((v1 >> 5) + key[1]);
+    v1 += ((v0 << 4) + key[2]) ^ (v0 + sum) ^ ((v0 >> 5) + key[3]);
+  }
+  rand[0] = v0/(0xffffffffu+1.0f);
+  rand[1] = v1/(0xffffffffu+1.0f);
+}
+

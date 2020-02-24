@@ -1,6 +1,7 @@
 #pragma once
 #include "physics/rigidbody.h"
 #include "physics/move.h"
+#include "physics/accel.h"
 
 #include <stdint.h>
 
@@ -22,7 +23,8 @@ typedef struct sx_entity_t
   char id;      // single letter identifying group for trigger scripting
   uint8_t camp; // which side are you on?
 
-  float hitpoints; // how much damage can we still take?
+  uint32_t birth_time; // when was this spawned?
+  float hitpoints;     // how much damage can we still take?
 }
 sx_entity_t;
 
@@ -30,19 +32,11 @@ typedef struct sx_heli_t sx_heli_t;
 
 typedef struct sx_world_t
 {
-  // global things:
-  // wind conditions
-  // terrain texture ids
-  // sun sky clouds environment
-
   // TODO: store current mission here?
 
   // list of loaded entities, inited from .pos file when entering mission
   uint32_t num_entities;
   sx_entity_t entity[1024];
-
-  // pool for dynamically spawned entities:
-  uint32_t num_dyn_entities;
 
   int32_t terrain_wd, terrain_ht, terrain_bpp;
   uint8_t *terrain; // TODO: make 16 bit?
@@ -60,11 +54,16 @@ typedef struct sx_world_t
   uint32_t player_weapon;
 
   uint32_t fire_entity;    // broken stuff burns
+
+  // for collision detection
+  sx_bvh_t *bvh;
 }
 sx_world_t;
 
 void sx_world_init();
 void sx_world_cleanup();
+
+void sx_world_think(const uint32_t dt);
 
 // collision detection and interaction between objects
 void sx_world_move(const uint32_t dt);
@@ -82,7 +81,7 @@ uint32_t sx_world_add_entity(
     uint32_t objectid,
     uint32_t dead_objectid,
     float *pos, quat_t *q,
-    char id, uint8_t camp, uint32_t ground);
+    char id, uint8_t camp);
 
 float sx_world_get_height(const float *p);
 void  sx_world_get_normal(const float *p, float *n);

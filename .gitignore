@@ -1,0 +1,10 @@
+sx
+anim
+pcx
+model
+pup/pup
+pup/test
+ext/pthread-pool/libpthreadpool.a
+*.o
+*.swp
+png2bc3

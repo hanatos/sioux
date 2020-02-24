@@ -8,6 +8,7 @@
 #include "physics/heli.h"
 #include "terrain.h"
 #include "matrix4.h"
+#include "gameplay.h"
 
 static unsigned int
 compile_src(const char *src, int type)
@@ -1718,6 +1719,10 @@ int sx_vid_handle_input()
           break;
         case SDLK_f:
           sx_heli_control_flap(sx.world.player_move);
+          break;
+        case SDLK_SPACE:
+          // XXX need generic heli interface here too
+          sx_spawn_rocket(sx.world.entity + sx.world.player_entity);
           break;
       }
       break;

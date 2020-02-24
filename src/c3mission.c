@@ -5,6 +5,7 @@
 #include "camera.h"
 #include "sx.h"
 #include "physics/heli.h"
+#include "move/common.h"
 
 // TODO: need these return values?
 int
@@ -12,9 +13,10 @@ c3_mission_begin(
     c3_mission_t *mis)
 {
   char filename[256];
+  mis->gamestate = C3_GAMESTATE_FLIGHT;
   c3_triggers_parse_music(filename, mis->music, C3_GAMESTATE_PAD, 'f');
   sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), 1);
-  sx_sound_loop(sx.assets.sound+mis->snd_engine, -1, 1000);
+  sx_sound_loop(sx.assets.sound+mis->snd_engine, 5, 1000);
   uint32_t objectid = 0;
   uint32_t startposid = 0;
   quat_t q;
@@ -61,7 +63,14 @@ c3_mission_begin(
     // read orientation
     const float heading = 2.0f*M_PI*f[i].heading/(float)0xffff;
     quat_from_euler(&q, 0, 0, heading);
-    uint32_t eid = sx_world_add_entity(objectid, objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i), 1);
+    uint32_t eid = sx_world_add_entity(objectid, objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i));
+    // wire move routines:
+    if(!strncmp(sx.assets.object[objectid].move, "helo", 4))
+    {
+      sx.world.entity[eid].move_data = malloc(sizeof(sx_heli_t)); // XXX call helo_init
+      sx.world.entity[eid].move.update_forces = sx_move_helo_update_forces;
+      // TODO: wire damage func
+    }
 #if 0 // XXX DEBUG
     if(strcmp(sx.assets.object[objectid].filename, "oak4"))
     {
@@ -88,17 +97,17 @@ c3_mission_begin(
   float *pos = sx.world.entity[startposid].body.c;
   q = sx.world.entity[startposid].body.q;
   // add assets: deadcoma.ai and flames.ai:
-  const uint32_t dead_player_oid = sx_assets_load_object(&sx.assets, "deadcoma");
+  const uint32_t dead_player_oid = sx_assets_load_object(&sx.assets, "deadcoma", 1);
   // add player entity and attach camera and movement controller:
   uint32_t eid = sx_world_add_entity(player_objectid, dead_player_oid, pos, &q,
-      sx.world.entity[startposid].id, sx.world.entity[startposid].camp, 1);
+      sx.world.entity[startposid].id, sx.world.entity[startposid].camp);
 
-  const uint32_t flames = sx_assets_load_object(&sx.assets, "fire");
+  const uint32_t flames = sx_assets_load_object(&sx.assets, "fire", 1);
   sx.world.fire_entity = sx_world_add_entity(flames, flames, pos,
       // this is 90 deg rotated around z at least
       &q,
       // XXX ??? probably 0 0 1
-      sx.world.entity[startposid].id, sx.world.entity[startposid].camp, 1);
+      sx.world.entity[startposid].id, sx.world.entity[startposid].camp);
 
   // setup start position:
   sx_camera_init(&sx.cam);
@@ -117,8 +126,8 @@ c3_mission_begin(
   sx.world.entity[eid].move_data = sx.world.player_move;
   sx.world.entity[eid].move = (sx_move_t) {
     .id            = "plyr",
-    .update_forces = &sx_heli_update_forces,
-    .damage        = &sx_heli_damage,
+    .update_forces = sx_heli_update_forces,
+    .damage        = sx_heli_damage,
     .snd_ambient   = sx_assets_load_sound(&sx.assets, "comanche.wav"),
   };
 
@@ -139,10 +148,11 @@ void
 c3_mission_pump_events(
     c3_mission_t *mis)
 {
-  char filename[32];
+  // TODO: put this in some gamestate switch, too:
   if(!Mix_PlayingMusic())
   {
-    c3_triggers_parse_music(filename, mis->music, C3_GAMESTATE_FLIGHT, 'f');
+    char filename[32];
+    c3_triggers_parse_music(filename, mis->music, mis->gamestate, 'f');
     sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), -1);
   }
   const float *player_pos = sx.world.entity[sx.world.player_entity].body.c;
@@ -247,8 +257,8 @@ c3_mission_load(
   char filename[16];
   for(int i = 0; i < C3_GAMESTATE_SIZE; i++)
   {
-     c3_triggers_parse_music(filename, mis->music, i ,'f');
-     sx_assets_load_music(&sx.assets, filename);
+    c3_triggers_parse_music(filename, mis->music, i ,'f');
+    sx_assets_load_music(&sx.assets, filename);
   }
   if(file_readline(f, line)) return 1;
   sscanf(line, "%d", &mis->mission_type);
@@ -280,7 +290,7 @@ c3_mission_load(
     if(file_readline(f, line)) return 1;
     if(line[0] == '<') break; // end marker reached
     // returns object handle
-    if(sx_assets_load_object(&sx.assets, line) == -1) return 1;
+    if(sx_assets_load_object(&sx.assets, line, 0) == -1) return 1;
   }
   fprintf(stdout, "[c3mission] loading objects finished\n");
 
@@ -341,8 +351,20 @@ c3_mission_load(
   mis->snd_warn_torque = sx_assets_load_sound(&sx.assets, "warntorq.wav");
   mis->snd_cannon      = sx_assets_load_sound(&sx.assets, "cannon.wav");
 
-  mis->snd_fire = sx_assets_load_sound(&sx.assets, "fire.wav");
-  mis->snd_hit  = sx_assets_load_sound(&sx.assets, "hitbymis.wav");
+  mis->snd_fire    = sx_assets_load_sound(&sx.assets, "fire.wav");
+  mis->snd_hit     = sx_assets_load_sound(&sx.assets, "hitbymis.wav");
+  mis->snd_explode = sx_assets_load_sound(&sx.assets, "explode.wav");
+
+  // remember indices of dynamic objects
+  mis->obj_fire           = sx_assets_load_object(&sx.assets, "fire", 1);
+  mis->obj_explosion_air  = sx_assets_load_object(&sx.assets, "airboom", 1);
+  mis->obj_explosion_dirt = sx_assets_load_object(&sx.assets, "dirtboom", 1);
+  mis->obj_explosion_nuke = sx_assets_load_object(&sx.assets, "nukeboom", 1);
+  mis->obj_debris         = sx_assets_load_object(&sx.assets, "chunk", 1);
+  mis->obj_rocket         = sx_assets_load_object(&sx.assets, "rocket", 1);
+  mis->obj_stinger        = sx_assets_load_object(&sx.assets, "stinger", 1);
+  mis->obj_hellfire       = sx_assets_load_object(&sx.assets, "hellfire", 1);
+  mis->obj_bullet         = sx_assets_load_object(&sx.assets, "tracer", 1);
 
   // it follows: triggers (see triggers.h)
   return c3_triggers_parse(mis, f);

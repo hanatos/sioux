@@ -1,0 +1,68 @@
+# have one header for each plot routine
+
+many plot routines are found in the ai files, such as
+
+1pr2
+1prt
+2prt
+2psc
+2sa6
+airp
+coma
+edit
+face
+fdot
+glue
+helo
+nanu
+ndot
+pump
+sock
+tank
+tire
+tr17
+tre5
+tre6
+wolf
+wtnk
+
+## found in ai files at high detail
+
+1pr2 -- debris (chunk)
+1prt -- single 3do without animation
+2prt -- two part structure, lighthouse?
+2psc -- trailer? scud has it for shadow
+2sa6 -- 2s6m
+airp -- airplane (su25,warthog)
+coma -- hero comanche
+edit -- only visible in edit mode
+face -- camera facing sprite? see fire
+glue -- trail
+helo -- helicopter (hind,rooivalk)
+nanu -- battle ship (nanu0,nanuchka)
+pump -- oil pump
+sock -- wind sock (sock)
+tank -- tank (arrow,bmp-2,brdm,t80,m109,m1a2,ma3)
+tire -- car with tires (c5m4,c5m8,fueltrk*,humvee,m35a,m35r)
+tr17 -- tree with 17 clumps (pine)
+tre5 -- tree with 5 clumps (oak, deadoak)
+tre6 -- josh
+wolf -- werewolf helicopter
+wtnk -- high detail tank (brdm,sa9)
+
+## priority list
+
+done:
+* 1prt, the default if we do nothing
+* edit, we catch it and discard
+* coma, hero comanche
+* helo, other helicopters
+* tire, humvee found in every base
+* 2psc, covered by our default 1prt
+
+up next:
+* wolf, werewolf helicopters
+* face, need for fire
+* sock, wind sock useful to have in our base for start and landing
+* pump, for tutorial level c1m1
+* tank, for c1m2

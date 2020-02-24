@@ -1,6 +1,7 @@
 #include "physics/heli.h"
 #include "sx.h"
 #include "matrix3.h"
+#include "triggers.h"
 
 #if 0
 1ft= 0.3048000m
@@ -238,9 +239,10 @@ float sx_heli_alt_above_ground(const sx_heli_t *h)
 }
 
 // TODO: will need replacement
-void sx_heli_damage(void *hv, float x[3], float p[3])
+void sx_heli_damage(sx_entity_t *ent, float x[3], float p[3])
 {
-  sx_heli_t *h = hv;
+  sx_heli_t *h = ent->move_data;
+  float new_hitpoints = h->entity->hitpoints;
   float impulse = sqrtf(dot(h->entity->body.pv, h->entity->body.pv));
   if(impulse > 15000.0) // impulse in meters/second * kg
   {
@@ -250,26 +252,35 @@ void sx_heli_damage(void *hv, float x[3], float p[3])
       if(impulse > 100000.0)
       {
         sx_sound_play(sx.assets.sound + sx.mission.snd_hit, -1);
-        h->entity->hitpoints -= 20; // TODO: damage gear
+        new_hitpoints -= 20; // TODO: damage gear
       }
     }
     else
     {
       sx_sound_play(sx.assets.sound + sx.mission.snd_hit, -1);
-      h->entity->hitpoints -= 5;
+      new_hitpoints -= 5;
       if(impulse > 50000.0)
-        h->entity->hitpoints -= 100;
+        new_hitpoints -= 100;
     }
   }
   // TODO: lose trigger
   // died
-  if(h->entity->hitpoints <= 0.0)
+  if(new_hitpoints <= 0.0 && h->entity->hitpoints > 0.0)
+  {
+    sx_sound_play(sx.assets.sound + sx.mission.snd_explode, -1);
     sx.cam.mode = s_cam_rotate;
+    sx.mission.gamestate = C3_GAMESTATE_LOSE;
+    sx_sound_loop(sx.assets.sound+sx.mission.snd_fire, 5, 1000);
+    char filename[32];
+    c3_triggers_parse_music(filename, sx.mission.music, C3_GAMESTATE_LOSE, 'f');
+    sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), -1);
+  }
+  h->entity->hitpoints = new_hitpoints;
 }
 
-void sx_heli_update_forces(void *hvoid, sx_rigid_body_t *b)
+void sx_heli_update_forces(sx_entity_t *ent, sx_rigid_body_t *b)
 {
-  sx_heli_t *h = hvoid;
+  sx_heli_t *h = ent->move_data;
   sx_actuator_t *a;
 
   // gravity:

@@ -1,5 +1,6 @@
 #include "sx.h"
 #include "vid.h"
+#include "threads.h"
 
 #include <string.h>
 
@@ -30,6 +31,8 @@ sx_init()
   }
   Mix_ReserveChannels(1); // for radio
   fprintf(stderr, "[sx] got audio spec %d %d %d\n", sx.audio_spec.channels, sx.audio_spec.freq, sx.audio_spec.samples);
+  threads_global_init();
+  sx_world_init();
   return 0;
 }
 
@@ -38,4 +41,5 @@ sx_cleanup()
 {
   Mix_CloseAudio();
   sx_vid_cleanup(); // shuts down SDL
+  threads_global_cleanup();
 }

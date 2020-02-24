@@ -40,10 +40,11 @@ sx_music_t* sx_assets_filename_to_music(
     sx_assets_t* a,
     const char* filename);
 
-// returns handle, does not dedup (need to keep index for pos files)
+// returns handle, does not dedup unless instructed (need to keep index for pos files)
 // use lower case file names
 // loads .ai files
 uint32_t sx_assets_load_object(
     sx_assets_t *a,
-    const char *filename);
+    const char *filename,
+    int dedup);
 // TODO: routine to nuke the whole thing and start from scratch

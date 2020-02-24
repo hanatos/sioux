@@ -40,63 +40,37 @@ sx_assets_load_music(
 
 sx_music_t* sx_assets_filename_to_music(sx_assets_t* a, const char* filename)
 {
-	if(a == NULL || filename == NULL)
-		return NULL;
+  // find gamestate i corresponding to filename
+  int i = C3_GAMESTATE_FLIGHT;
+  if(!strncmp(filename+1, "win", 3)) i = C3_GAMESTATE_WIN;
+  else if(!strncmp(filename+1, "lose", 4)) i = C3_GAMESTATE_WIN;
+  else if(!strncmp(filename+2, "lwin", 3)) i = C3_GAMESTATE_WIN;
+  else if(!strncmp(filename+2, "dire", 4)) i = C3_GAMESTATE_DIRE;
+  else if(!strncmp(filename+2, "flight", 6)) i = C3_GAMESTATE_FLIGHT;
+  else if(!strncmp(filename+2, "lwin", 4)) i = C3_GAMESTATE_LOSE_WIN;
+  else if(!strncmp(filename+2, "combat", 6)) i = C3_GAMESTATE_COMBAT;
+  else if(!strncmp(filename+2, "pad", 3)) i = C3_GAMESTATE_PAD;
+  else if(!strncmp(filename+2, "scary", 3)) i = C3_GAMESTATE_SCARY;
 
-	char* fn = NULL;
-	sx_music_t* m = NULL;
-
-	for(int i=0;i<C3_GAMESTATE_SIZE;i++) 
-	{
-		fn = NULL;
-  		if((fn = strstr(filename, c3_condition_midi_text[i])))
-        	{
-			// 'f'/'g' part of filename
-			if(isalpha(filename[0]) != 0 && (filename[0] == 'f' || filename[0] == 'g'))
-			{
-				// prefix letter part of filename 'a' to 'e' or 'n'
-				if(fn - &filename[1] > 0)
-				{
-					if(fn - &filename[1] ==  1 && (isalpha(filename[1]) != 0 && 
-					 ((filename[1] >= 'a' && filename[1] <= 'e') || filename[1] == 'n')))
-					{
-						if('e' - filename[1] >= 0)
-							m = (filename[0] == 'f') ? &a->fmusic[i][6 - ('e' - filename[1] + 1)] 
-									       : &a->gmusic[i][6 - ('e' - filename[1] + 1)];
-						if(filename[1] == 'n')
-							m = (filename[0] == 'f') ? &a->fmusic[i][7] : &a->gmusic[i][7];
-						break;
-					}
-					else
-					{
-						m = NULL;
-						fprintf(stderr, "wrong midi filename format: %s\n", filename);
-						break;
-					}
-				}
-				// no letter prefix
-				m = filename[0] == 'f' ? &a->fmusic[i][0]
-				       		       : &a->gmusic[i][0];
-			}
-			else
-				m = NULL;
-		}
-		m = NULL;
-	}
-	return m;
+  if(filename[0] == 'f')
+    return a->fmusic[i];
+  return a->gmusic[i];
 }
 
 uint32_t
 sx_assets_load_object(
     sx_assets_t *a,
-    const char *filename)
+    const char *filename,
+    int dedup)
 {
   // in fact, we need to keep duplicates (or put references)
-  // because the .pos files will refer to this index:
-  // stupid dedup:
-  // for(int k=0;k<a->num_objects;k++)
-  //   if(!strcmp(a->object[k].filename, filename))
-  //     return k;
+  // because the .pos files will refer to this index. after loading
+  // has finished, we might get a previously loaded object (explosion)
+  // from the list by exhaustive search:
+  if(dedup) // stupid dedup:
+    for(int k=0;k<a->num_objects;k++)
+      if(!strcmp(a->object[k].filename, filename))
+        return k;
   assert(a->num_objects < sizeof(a->object)/sizeof(sx_object_t));
   // fprintf(stderr, "[assets] loading object %u %s\n", a->num_objects, filename);
   if(c3_object_load(a->object+a->num_objects, filename))

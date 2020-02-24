@@ -231,6 +231,8 @@ c3_triggers_check_cond(
       // TODO: check other ids
       return 0;
     case C3_COND_BELOW:      // below, <altitude>
+      // triggers_printf(stderr, "checking below %g %u\n",
+      //    m2ft(sx_heli_alt_above_ground(sx.world.player_move)), arg0);
       return m2ft(sx_heli_alt_above_ground(sx.world.player_move)) < arg0;
     case C3_COND_ABOVE:      // above, <altitude>
       // triggers_printf(stderr, "checking above %g %d\n",
@@ -332,13 +334,13 @@ char* c3_triggers_parse_music(char* filename, char letter, int gamestate, char f
   if(isalpha(fg) != 0 && ( fg == 'f' || fg == 'g' ))
     filename[i++] = fg;
 
-  if(isalpha(letter) != 0)
-    filename[i++] = tolower(letter);
-  else if(isdigit(letter) != 0 && letter != 0)
-    filename[i++] = 'n';
-
-  if(isalpha(letter) != 0 && (gamestate == C3_GAMESTATE_WIN || gamestate == C3_GAMESTATE_LOSE))
-    gamestate = C3_GAMESTATE_LOSE_WIN;
+  if(gamestate != C3_GAMESTATE_LOSE && gamestate != C3_GAMESTATE_WIN)
+  { // losing or winning has no variant
+    if(isalpha(letter) != 0)
+      filename[i++] = tolower(letter);
+    else if(isdigit(letter) != 0 && letter != 0)
+      filename[i++] = 'n';
+  }
 
   strncpy(&filename[i], c3_condition_midi_text[gamestate], 11);
 

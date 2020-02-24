@@ -35,9 +35,8 @@ int main(int argc, char *argv[])
     while(sim_time < end)
     {
       if(sx_vid_handle_input()) goto out;
-      // TODO:
-      // sx_ai_think();
-      sx_world_move(delta_sim_time);//end - sx.time);
+      sx_world_think(delta_sim_time);
+      sx_world_move(delta_sim_time);
       sim_time += delta_sim_time;
     }
     // another second passed, run game mechanics only then

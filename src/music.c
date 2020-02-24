@@ -26,6 +26,7 @@ int sx_music_init(sx_music_t *m, const char *filename)
 
   m->type = Mix_GetMusicType(m->music);
   strcpy(m->filename, filename);
+  Mix_VolumeMusic(MIX_MAX_VOLUME/3);
   return 0;
 }
 
