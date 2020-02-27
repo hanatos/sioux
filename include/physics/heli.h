@@ -113,6 +113,11 @@ static inline void sx_heli_control_collective(sx_heli_t *h, float v)
   h->ctl.collective = 0.2 + CLAMP(v, -0.2f, 1.0f);
 }
 
+static inline void sx_heli_control_increase_collective(sx_heli_t *h, float v)
+{
+  h->ctl.collective = CLAMP(h->ctl.collective + v, 0.0f, 1.2f);
+}
+
 static inline void sx_heli_control_tail(sx_heli_t *h, float v)
 {
   h->ctl.tail = CLAMP(v, -1.0f, 1.0f);
@@ -133,4 +138,4 @@ static inline void sx_heli_control_flap(sx_heli_t *h)
 void sx_heli_update_forces(sx_entity_t *e, sx_rigid_body_t *b);
 
 // damage the helicopter by given impulse p and hit point x (TODO: model or world space?)
-void sx_heli_damage(sx_entity_t *e, float x[3], float p[3]);
+void sx_heli_damage(sx_entity_t *e, const sx_entity_t *c, float dmg);

@@ -9,10 +9,10 @@
 int main(int argc, char *argv[])
 {
   // global init
-  sx_init();
+  sx_init(argc, argv);
 
   const char *mission = "c1m1.mis";
-  if(argc > 1) mission = argv[1];
+  if(argc > 1 && argv[1][0] != '-') mission = argv[1];
 
   const char *filename = mission;
   FILE *f = file_open(filename);
@@ -20,16 +20,32 @@ int main(int argc, char *argv[])
   c3_mission_load(&sx.mission, f);
   fclose(f);
 
-  c3_mission_begin(&sx.mission);
   sx_vid_start_mission();
+  c3_mission_begin(&sx.mission);
   uint32_t last_event = SDL_GetTicks();
   uint32_t frames = 0;
   sx.time = last_event;
   uint32_t sim_time = last_event;
   const uint32_t delta_sim_time = 1000.0f/60.0f; // usual vsync
+  int paused = 0;
   while(1)
   {
     sx_vid_render_frame_rect();
+
+    if(sx.paused && !paused)
+    {
+      paused = 1;
+    }
+    if(paused && !sx.paused)
+    {
+      last_event = sim_time = SDL_GetTicks();
+      paused = 0;
+    }
+    if(paused)
+    {
+      if(sx_vid_handle_input()) goto out;
+      continue;
+    }
 
     uint32_t end = SDL_GetTicks();
     while(sim_time < end)

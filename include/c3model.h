@@ -15,12 +15,17 @@ typedef struct c3m_header_t
   char filename[8]; // 8
   uint32_t dunno1;  // weird large number on world space range
   int32_t  aabb[6]; // zmin+1 zmax+1 -ymin -ymax+1 xmin xmax where the +-1 is probably some rounding on their side
-  uint32_t dunno2[6];// 16 [4] may be 21 normal 2 don't render? [5] seems to be 0
+  uint32_t num_mats;
+  uint32_t num_verts;
+  uint32_t num_tris;
+  uint32_t num_normals;
+  uint32_t num_child_offsets;
+  uint32_t num_end;  // = 0
   uint32_t off_mat;  // 68 (== 92, directly after header for null) // materials with texture names
   uint32_t off_vtx;  // 72 // vertex coordinates. int32_t stride 11, first three int are world space. [9],[10] might be texture st coordinates
   uint32_t off_tri;  // 76 // vertex indices. int32_t stride 8. [0]=0 [1]? [2,3,4] offset into vertex buffer [5,6,7] offset into normal buffer
   uint32_t off_nrm;  // 80 // normals? int32_t 4 strided are on unit sphere in signed int16_t range, fourth component seems to be 0 all the time
-  uint32_t offset4;  // 84 // ?? something optional, only seen it zero sized so far
+  uint32_t off_chl;  // 84 // 3-strided coordinate offsets to child
   uint32_t off_eof;  // 88 end of file offset
   // size: 92
   // it follows a buffer of int32_t sized numbers
@@ -33,9 +38,9 @@ typedef struct c3m_material_t
   char texname[12];
   uint32_t dunno[4];
   // 0 8 8 {0,128}
-  // r g b a ?
+  // r g b a=0 ?
   // ? ? ? ?
-  // 0 0 0 0 or 0 2 127 0
+  // 0 0 0 0 or 0 2 127 0 -- 0 num_frames, control register?{1,127}, 0
 }
 c3m_material_t;
 
@@ -123,7 +128,7 @@ c3m_num_triangles(const c3m_header_t *h)
 static inline int
 c3m_num_normals(const c3m_header_t *h)
 {
-  return (h->offset4 - h->off_nrm)/sizeof(c3m_normal_t);
+  return (h->off_chl - h->off_nrm)/sizeof(c3m_normal_t);
 }
 
 static inline c3m_material_t*
@@ -182,6 +187,23 @@ c3m_pack_tri(c3m_header_t *h, c3m_tri_t *t, int i)
   for(int k=0;k<3;k++) t->n[2][k] = n2->normal[k] / ((float)0xffff);
   t->st[2][0] = v2->st[0]/(float)0xffff;
   t->st[2][1] = v2->st[1]/(float)0xffff;
+}
+
+static inline uint32_t
+c3m_get_child_offsets(
+    c3m_header_t *h,
+    float       **o)
+{
+  uint32_t num = (h->off_eof - h->off_chl)/12;
+  *o = malloc(sizeof(float)*3*num);
+  int32_t *dat = (int32_t *)(((uint8_t *)h)+h->off_chl);
+  for(int i=0;i<num;i++)
+  {
+    (*o)[3*i+0] = ft2m(-dat[3*i+0]/(float)0xffff);
+    (*o)[3*i+1] = ft2m( dat[3*i+2]/(float)0xffff);
+    (*o)[3*i+2] = ft2m(-dat[3*i+1]/(float)0xffff);
+  }
+  return num;
 }
 
 static inline void

@@ -10,6 +10,8 @@
 #include "matrix4.h"
 #include "gameplay.h"
 
+uint64_t sx_vid_init_image(const char *filename, int smooth);
+
 static unsigned int
 compile_src(const char *src, int type)
 {
@@ -189,7 +191,8 @@ gl_error_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
 
 int sx_vid_init(
   uint32_t width,
-  uint32_t height)
+  uint32_t height,
+  int fullscreen)
 {
   sx_vid_t *vid = &sx.vid;
   memset(vid, 0, sizeof(sx.vid));
@@ -202,7 +205,10 @@ int sx_vid_init(
   // SDL_GL_SetSwapInterval(0); // vsync on // does nothing
 
   vid->window = SDL_CreateWindow("sioux", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-      width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN );
+      width, height,
+      fullscreen ?
+      SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN :
+      SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
   if(!vid->window) return 1;
   vid->context = SDL_GL_CreateContext(vid->window);
   if(!vid->context) return 1;
@@ -342,12 +348,15 @@ int sx_vid_init(
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sx.vid.vbo_hud_text[2]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(sx.vid.hud_text_id), sx.vid.hud_text_id, GL_STATIC_DRAW);
 
-  sx_vid_init_image("assets/hud-font.png", &sx.vid.hud_text_font);
+  sx.vid.hud_text_font = sx_vid_init_image("assets/hud-font.png", 0);
   sx.vid.hud_text_chars = 0;
+
+  sx.vid.env_cloud_noise0 = sx_vid_init_image("assets/cloud-noise0.png", 1);
+  sx.vid.env_cloud_noise1 = sx_vid_init_image("assets/cloud-noise1.png", 1);
 
   sx.vid.joystick = 0;
   if(SDL_NumJoysticks() > 0)
-    sx.vid.joystick = SDL_JoystickOpen(0);
+    sx.vid.joystick = SDL_JoystickOpen(SDL_NumJoysticks()-1);
   if(sx.vid.joystick)
   {
     fprintf(stderr, "[vid] found joystick %s with %d axes %d buttons %d balls\n",
@@ -360,7 +369,11 @@ int sx_vid_init(
   // init instance buffers (mat4 mv, mvp)
   glGenBuffers(1, &sx.vid.geo_instance_ssbo);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, sx.vid.geo_instance_ssbo);
-  glBufferData(GL_SHADER_STORAGE_BUFFER, 320000, 0, GL_STREAM_DRAW);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, 480000, 0, GL_STREAM_DRAW);
+
+  glGenBuffers(1, &sx.vid.geo_anim_ssbo);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, sx.vid.geo_anim_ssbo);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, 10000, 0, GL_STREAM_DRAW);
 
   // init flow textures
   sx.vid.tex_flow_cnt = 2;
@@ -404,6 +417,13 @@ int sx_vid_init(
 
 void sx_vid_start_mission()
 {
+  glGenBuffers(1, &sx.vid.geo_material_ssbo);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, sx.vid.geo_material_ssbo);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(sx_material_t)*sx.vid.geo_material_cnt,
+      sx.vid.geo_material, GL_STATIC_DRAW);
+  // fprintf(stderr, "uploading %u materials\n", sx.vid.geo_material_cnt);
+  assert(sizeof(sx.vid.geo_material) >= sizeof(sx_material_t)*sx.vid.geo_material_cnt);
+
   // mip maps uploaded and such?
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 }
@@ -448,51 +468,32 @@ uint32_t sx_vid_init_geo(const char *filename, float *aabb)
 
   // now walk textures and init images
   g->num_mat = c3m_num_materials(h);
+  g->mat_idx = -1;
   if(g->num_mat)
   {
-    uint32_t tu = 1; // texture unit
-    uint32_t *buf = malloc(sizeof(uint32_t) * g->num_mat * 8);
-    memset(buf, 0, sizeof(uint32_t)*g->num_mat*8);
+    g->mat_idx = sx.vid.geo_material_cnt;
+    sx.vid.geo_material_cnt += g->num_mat;
+    for(int i=0;i<g->num_uvs;i++) uvs[3*i+2] += g->mat_idx;
+    sx_material_t *mat = sx.vid.geo_material + g->mat_idx;
     for(int m=0;m<g->num_mat;m++)
     {
       c3m_material_t *mt = c3m_get_materials(h)+m;
-      g->mat[m].texname[0] = 0;
-      strncpy(g->mat[m].texname, mt->texname, sizeof(g->mat[m].texname));
-      g->mat[m].texu = -1;
-      g->mat[m].texid[0] = -1;
-      g->mat[m].tex_cnt = 0;
-      if(g->mat[m].texname[0])
+      mat[m].tex_handle = -1;
+      if(mt->texname[0])
       {
-        for(int i=0;i<m;i++) if(!strcmp(g->mat[m].texname, g->mat[i].texname))
+        for(int i=0;i<m;i++) if(!strcmp(mt->texname, c3m_get_materials(h)[i].texname))
         {
-          g->mat[m].texu = g->mat[i].texu;
-          memcpy(g->mat[m].texid, g->mat[i].texid, sizeof(g->mat[m].texid));
-          g->mat[m].tex_cnt = g->mat[i].tex_cnt;
+          mat[m].tex_handle = mat[i].tex_handle;
           break;
         }
-        if(g->mat[m].texu == -1)
-        {
-          g->mat[m].tex_cnt = sx_vid_init_image(g->mat[m].texname, g->mat[m].texid);
-          g->mat[m].texu = tu++;
-        }
+        if(mat[m].tex_handle == -1)
+          mat[m].tex_handle = sx_vid_init_image(mt->texname, 0);
       }
-      buf[m*8 + 0] = g->mat[m].texu;
-      buf[m*8 + 1] = g->mat[m].dunno[0] = mt->dunno[0];
-      buf[m*8 + 2] = g->mat[m].dunno[1] = mt->dunno[1];
-      buf[m*8 + 3] = g->mat[m].dunno[2] = mt->dunno[2];
-      buf[m*8 + 4] = g->mat[m].dunno[3] = mt->dunno[3];
+      mat[m].dunno[0] = mt->dunno[0];
+      mat[m].dunno[1] = mt->dunno[1];
+      mat[m].dunno[2] = mt->dunno[2];
+      mat[m].dunno[3] = mt->dunno[3];
     }
-    // upload material info as texture
-    glGenTextures(1, &g->mat_tex);
-    glBindTexture(GL_TEXTURE_2D, g->mat_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, 8, g->num_mat);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 8, g->num_mat, GL_RGBA,
-        GL_UNSIGNED_BYTE, buf);
-    free(buf);
   }
 
   // XXX get from considering contents of input model?
@@ -650,6 +651,29 @@ int sx_vid_init_terrain(
       glTexStorage2D(GL_TEXTURE_2D, num_mipmaps, GL_R8, width, height);
       glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED, GL_UNSIGNED_BYTE, buf);
 
+#if 0 // XXX DEBUG test horizon map creation
+      fprintf(stderr, "creating horizon map...\n");
+      // TODO: alloc arrays
+      // TODO: init with zero
+      uint64_t test = 0;
+      for(int j=0;j<height;j++) for(int i=0;i<width;i++)
+      for(int t=0;t<j;t++) for(int s=0;s<i;s++)
+      {
+        // put max inclination angles in respective slots
+        uint8_t h0 = buf[j*width+i];
+        uint8_t h1 = buf[t*width+s];
+        // TODO: pick lower h and insert into their slot
+        float diff[3] = {i-s, h0-h1, j-t};
+        // TODO: scale by terrain xz scale and height
+        // modulo topology: // XXX use width and height in world space?
+        if(diff[0] >= width /2.0) diff[0] -= width;
+        if(diff[1] >= height/2.0) diff[1] -= height;
+        test += // XXX DEBUG: should store this as one of 16 uint8 for i,j or s,t
+        CLAMP(256.0 * diff[0] / sqrtf(dot(diff, diff)), 0, 255);
+      }
+      fprintf(stderr, "creating horizon map done.\n");
+#endif
+
       // generate mip maps
       if(num_mipmaps > 1)
         glGenerateMipmap(GL_TEXTURE_2D);
@@ -696,75 +720,49 @@ int sx_vid_init_terrain(
   return 0;
 }
 
-// load texture file, return texture count or 0
-uint32_t sx_vid_init_image(const char *filename, uint32_t *texid)
+// load texture file, return bindless texture handle
+uint64_t sx_vid_init_image(const char *filename, int smooth)
 {
   if(filename[0] == 0) return 0;
   // mangle from PCX to lowercase png
   char fn[128];
   png_from_pcx(filename, fn, sizeof(fn));
-
-  int cnt = 0; // how many textures in an animation?
-  // apparently a '0' suffix means that the texture will be animated.
-  // count trailing zeros:
-  uint32_t z = 0;
   int len = strlen(fn);
-  // sometimes it's also the case that the first frame is 01, unfortunately.
-  // but this way of detecting it fails because there are plenty of 01 02 variants
-  // that are not at all animations :/
-  int off = 0;
-  // if(fn[len-5] == '0' || fn[len-5] == '1') z = 1;
-  // if(fn[len-5] == '1') off = 1;
-  if(fn[len-5] == '0') z = 1;
-  while(len-5-z > 0 && fn[len-5-z] == '0') z++;
-  fn[len-4-z] = 0;
+  fn[len-4] = 0;
 
-  char pattern[150] = {0};
-  if(z > 0) snprintf(pattern, sizeof(pattern), "%s%%0%uu.bc3", fn, z);
-  else      snprintf(pattern, sizeof(pattern), "%s.bc3", fn);
-  int prev_wd = 0, prev_ht = 0;
-  for(int i=0;i<32;i++)
-  { // don't go over memory bound, max textures is 32
-    snprintf(fn, sizeof(fn), pattern, i+off);
+  char pattern[138];
+  snprintf(pattern, sizeof(pattern), "%s.bc3", fn);
+  int width, height;
+  uint8_t *buf;
+  if(bc3_read(pattern, &width, &height, &buf))
+  {
+    fprintf(stderr, "[vid] failed to open `%s'\n", pattern);
+    return -1;
+  }
 
-    int width, height, bpp = 8;
-    uint8_t *buf;
-    // int err = png_read(fn, &width, &height, (void**)&buf, &bpp);
-    int err = bc3_read(fn, &width, &height, &buf);
-    if(err && (cnt == 0))
-    {
-      fprintf(stderr, "[vid] failed to open `%s' (%d)\n", fn, err);
-      return 0;
-    }
-    else if(err && (cnt > 0)) return cnt;
-    assert(bpp == 8);
-
-    if(i > off && (prev_wd != width || prev_ht != height))
-    { // apparently not an animated texture after all
-      free(buf);
-      return cnt;
-    }
-    prev_wd = width;
-    prev_ht = height;
-
-    glGenTextures(1, texid+i);
-    glBindTexture(GL_TEXTURE_2D, texid[i]);
-    glCompressedTexImage2D(GL_TEXTURE_2D, 0,
-        // GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
-        GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT,
-        width, height, 0, 
-        16*((width+3)/4)*((height+3)/4), buf);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  GLuint texid;
+  glGenTextures(1, &texid);
+  glBindTexture(GL_TEXTURE_2D, texid);
+  glCompressedTexImage2D(GL_TEXTURE_2D, 0,
+      GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT,
+      width, height, 0, 
+      16*((width+3)/4)*((height+3)/4), buf);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  if(smooth)
+  {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  }
+  else
+  {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    free(buf);
-    cnt++;
-    // fprintf(stderr, "[vid] loading texture `%s'\n", fn);
-    if(!z) break;
   }
-  return cnt;
+  GLuint64 handle = glGetTextureHandleARB(texid);
+  glMakeTextureHandleResidentARB(handle);
+  free(buf);
+  return handle;
 }
 
 
@@ -785,7 +783,8 @@ sx_vid_compute_mvp(
     const quat_t *q_model,   // orientation of model (model to world quaternion)
     const float  *p_model,   // world space position of model coordinate system
     sx_camera_t  *cam,
-    int c3model)
+    int           old,       // use old camera orientation (prev frame for taa)
+    int           c3model)   // is this in c3 coordinates?
 {
   // C3M
   // if c3 model coordinates, need to flip to our local model coordinates as
@@ -805,8 +804,8 @@ sx_vid_compute_mvp(
   mat4_from_mat3(M, mat3, p_model);
 
   // V: world to view space
-  float c_pos[3] = {-cam->x[0], -cam->x[1], -cam->x[2]};
-  quat_t vq = cam->q;
+  float c_pos[3] = {(old ? -cam->prev_x[0] : -cam->x[0]), (old ? -cam->prev_x[1]: -cam->x[1]), (old ? -cam->prev_x[2] : -cam->x[2])};
+  quat_t vq = old ? cam->prev_q : cam->q;
   quat_conj(&vq);
   quat_transform(&vq, c_pos);
 
@@ -865,7 +864,8 @@ sx_vid_push_geo_instance(
     const float  *omp,
     const quat_t *omq,
     const float  *mp,
-    const quat_t *mq)
+    const quat_t *mq,
+    uint32_t frame)
 {
   if(gi < 0 || gi >= sx.vid.num_geo) return;
   sx_geo_t *g = sx.vid.geo + gi;
@@ -873,9 +873,12 @@ sx_vid_push_geo_instance(
   if(g->instances > 1024) return;
   int iid = g->instances++;
   // specific to this geo/entity
-  float *MV  = g->instance_mat + 32*iid;
-  float *MVP = g->instance_mat + 32*iid + 16;
-  sx_vid_compute_mvp(MVP, MV, sx.vid.cube_side, mq, mp, &sx.cam, 1);
+  float *MV   = g->instance_mat + 48*iid;
+  float *MVP  = g->instance_mat + 48*iid + 16;
+  float *MVPO = g->instance_mat + 48*iid + 32;
+  sx_vid_compute_mvp(MVPO, MV, sx.vid.cube_side, omq, omp, &sx.cam, 1, 1);
+  sx_vid_compute_mvp(MVP,  MV, sx.vid.cube_side, mq,  mp,  &sx.cam, 0, 1);
+  g->instance_anim[iid] = frame;
 }
 
 void
@@ -891,55 +894,11 @@ sx_vid_render_instanced_geo(
   // specific to this geo/entity
   glUniform1ui(glGetUniformLocation(program, "u_instance_offset"), g->instance_offset);
 
-  // bind textures from geo material with given index
-  int tu = 0;
-  for(int m=0;m<g->num_mat;m++) if(g->mat[m].texu > tu)
-  {
-    tu = g->mat[m].texu; // only if not already bound by earlier material
-    uint32_t ti = (sx.time/250) % g->mat[m].tex_cnt;
-    if(g->mat[m].texid[ti] != -1)
-      glBindTextureUnit(g->mat[m].texu, g->mat[m].texid[ti]);
-  }
-
-  glBindTextureUnit(9, g->mat_tex);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, sx.vid.geo_instance_ssbo);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, sx.vid.geo_material_ssbo);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, sx.vid.geo_anim_ssbo);
   glBindVertexArray(g->vaid);
   glDrawElementsInstanced(GL_TRIANGLES, g->num_idx, GL_UNSIGNED_INT, 0, g->instances);
-}
-
-void
-sx_vid_render_geo(
-    const uint32_t gi,
-    const float  *omp,
-    const quat_t *omq,
-    const float  *mp,
-    const quat_t *mq)
-{
-  if(gi < 0 || gi >= sx.vid.num_geo) return;
-  sx_geo_t *g = sx.vid.geo + gi;
-
-  // all geo use this ubershader:
-  uint32_t program = sx.vid.program_hero;
-
-  // specific to this geo/entity
-  float MVP[16], MV[16];
-  sx_vid_compute_mvp(MVP, MV, sx.vid.cube_side, mq, mp, &sx.cam, 1);
-  glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
-  glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
-
-  // bind textures from geo material with given index
-  int tu = 0;
-  for(int m=0;m<g->num_mat;m++) if(g->mat[m].texu > tu)
-  {
-    tu = g->mat[m].texu; // only if not already bound by earlier material
-    uint32_t ti = (sx.time/250) % g->mat[m].tex_cnt;
-    if(g->mat[m].texid[ti] != -1)
-      glBindTextureUnit(g->mat[m].texu, g->mat[m].texid[ti]);
-  }
-
-  glBindTextureUnit(9, g->mat_tex);
-  glBindVertexArray(g->vaid);
-  glDrawElements(GL_TRIANGLES, g->num_idx, GL_UNSIGNED_INT, 0);
 }
 
 // compute matrix from 3d flow texture space aligned with
@@ -1018,12 +977,10 @@ void sx_vid_render_frame_rect()
   // glClearColor(0, 0, 0, 1);
   // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+  float MVPO[16];
   sx.vid.geo_instance_cnt = 0;
 
   fbo_t *old_fbo = sx.vid.fbo == sx.vid.fbo0 ? sx.vid.fbo1 : sx.vid.fbo0;
-
-  // half angle of horizontal field of view. pi/2 means 180 degrees total
-  // and is the max we can get with only two cubemap sides
 
   // rasterise geo before ray tracing
   if(sx.vid.program_hero != -1)
@@ -1046,11 +1003,15 @@ void sx_vid_render_frame_rect()
       uint32_t program = sx.vid.program_terrain;
       glUseProgram(program);
       glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
-      glUniform1f(glGetUniformLocation(program, "u_lod"), 1);
+      glUniform1f(glGetUniformLocation(program, "u_lod"), sx.lod);
       glUniform2f(glGetUniformLocation(program, "u_res"), sx.width, sx.height);
       glUniform1i(glGetUniformLocation(program, "u_frame"), sx.time);
       glUniform3f(glGetUniformLocation(program, "u_pos_ws"),
           sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
+      glUniform3f(glGetUniformLocation(program, "u_pos_coma_ws"),
+          sx.world.entity[sx.world.player_entity].body.c[0],
+          sx.world.entity[sx.world.player_entity].body.c[1],
+          sx.world.entity[sx.world.player_entity].body.c[2]);
       glUniform2f(glGetUniformLocation(program, "u_terrain_bounds"),
           sx.world.terrain_low, sx.world.terrain_high);
 
@@ -1059,9 +1020,12 @@ void sx_vid_render_frame_rect()
       quat_t mq;
       quat_init_angle(&mq, 0, 1, 0, 0);
       float mp[] = {sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]};
-      sx_vid_compute_mvp(MVP, MV, -1, &mq, mp, &sx.cam, 0);
+      sx_vid_compute_mvp(MVP, MV, -1, &mq, mp, &sx.cam, 0, 0);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
+      sx_vid_compute_mvp(MVPO, MV, -1, &mq, mp, &sx.cam, 1, 0);
+      glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp_old"), 1, GL_TRUE, MVPO);
+      // glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
       // bind terrain textures:
       glBindTextureUnit( 1, sx.vid.tex_terrain[0]); // colour
@@ -1083,6 +1047,8 @@ void sx_vid_render_frame_rect()
     // global uniforms:
     // XXX mission -> world?
     // glUniform3f(glGetUniformLocation(program, "u_sun"), sunv[0], sunv[1], sunv[2]);
+    glUniform2f(glGetUniformLocation(program, "u_terrain_bounds"),
+        sx.world.terrain_low, sx.world.terrain_high);
     glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
     glUniform2f(glGetUniformLocation(program, "u_res"), sx.width, sx.height);
     glUniform1i(glGetUniformLocation(program, "u_frame"), sx.time);
@@ -1102,9 +1068,13 @@ void sx_vid_render_frame_rect()
       if(sx.vid.geo[g].instances > 0)
       {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, sx.vid.geo_instance_ssbo);
-        glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, 32*sizeof(float)*sx.vid.geo[g].instances, sx.vid.geo[g].instance_mat);
-        sx.vid.geo[g].instance_offset = offset / (32*sizeof(float));
-        offset += 32*sizeof(float)*sx.vid.geo[g].instances;
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, 48*sizeof(float)*sx.vid.geo[g].instances, sx.vid.geo[g].instance_mat);
+        sx.vid.geo[g].instance_offset = offset / (48*sizeof(float));
+
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, sx.vid.geo_anim_ssbo);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset/48, sizeof(uint32_t)*sx.vid.geo[g].instances, sx.vid.geo[g].instance_anim);
+
+        offset += 48*sizeof(float)*sx.vid.geo[g].instances;
       }
     }
     // actually draw
@@ -1112,6 +1082,7 @@ void sx_vid_render_frame_rect()
       if(sx.vid.geo[g].instances > 0)
         sx_vid_render_instanced_geo(g);
 
+#if 0
     // draw debug force lines
     if(sx.vid.program_debug_line != -1 && sx.vid.debug_line_cnt)
     {
@@ -1123,7 +1094,7 @@ void sx_vid_render_frame_rect()
       float MVP[16], MV[16];
       quat_t mq;
       quat_init_angle(&mq, 0, 1, 0, 0);
-      sx_vid_compute_mvp(MVP, MV, -1, &mq, ent->body.c, &sx.cam, 0);
+      sx_vid_compute_mvp(MVP, MV, -1, &mq, ent->body.c, &sx.cam, 0, 0);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
@@ -1132,6 +1103,7 @@ void sx_vid_render_frame_rect()
       glBindVertexArray(sx.vid.vao_debug_line);
       glDrawArrays(GL_LINES, 0, sx.vid.debug_line_cnt/6);
     }
+#endif
 #endif
 
 #if 0
@@ -1151,7 +1123,7 @@ void sx_vid_render_frame_rect()
       // glUniform3f(glGetUniformLocation(program, "u_pos_ws"),
       //     ent->body.c[0], ent->body.c[1], ent->body.c[2]);
 
-      sx_vid_compute_mvp(MVP, MV, -1, &ent->body.q, ent->body.c, &sx.cam, 0);
+      sx_vid_compute_mvp(MVP, MV, -1, &ent->body.q, ent->body.c, &sx.cam, 0, 0);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
       glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
@@ -1179,6 +1151,7 @@ void sx_vid_render_frame_rect()
 
     glUniform1f(glGetUniformLocation(program, "u_hfov"), sx.cam.hfov);
     glUniform2f(glGetUniformLocation(program, "u_res"), sx.width, sx.height);
+    glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp_old"), 1, GL_TRUE, MVPO);
     glUniform3f(glGetUniformLocation(program, "u_pos"),
         sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]);
     glUniform4f(glGetUniformLocation(program, "u_orient"),
@@ -1186,6 +1159,9 @@ void sx_vid_render_frame_rect()
         sx.cam.q.x[2], sx.cam.q.w);
     glUniform2f(glGetUniformLocation(program, "u_terrain_bounds"),
         sx.world.terrain_low, sx.world.terrain_high);
+    glUniform1f(glGetUniformLocation(program, "u_time"), sx.time / 1000.0f);
+    glUniformHandleui64ARB(glGetUniformLocation(program, "img_noise0"), sx.vid.env_cloud_noise0);
+    glUniformHandleui64ARB(glGetUniformLocation(program, "img_noise1"), sx.vid.env_cloud_noise1);
 
     glBindTextureUnit(0, old_fbo->tex_color[0]);
     glBindTextureUnit(1, sx.vid.raster->tex_color[0]);
@@ -1277,7 +1253,7 @@ void sx_vid_render_frame_rect()
     glNamedBufferSubData(sx.vid.vbo_hud_text[0], 0, sizeof(float)*sx.vid.hud_text_chars*8, sx.vid.hud_text_vx);
     glNamedBufferSubData(sx.vid.vbo_hud_text[1], 0, sizeof(float)*sx.vid.hud_text_chars*8, sx.vid.hud_text_uv);
     // glNamedBufferSubData(sx.vid.vbo_hud_text[2], 0, sx.vid.hud_text_chars*6, sx.vid.hud_text_id);
-    glBindTextureUnit(0, sx.vid.hud_text_font);
+    glUniformHandleui64ARB(glGetUniformLocation(sx.vid.program_hud_text, "font"), sx.vid.hud_text_font);
     glBindVertexArray(sx.vid.vao_hud_text);
     glDrawElements(GL_TRIANGLES, sx.vid.hud_text_chars*6, GL_UNSIGNED_INT, 0);
     glDisable(GL_BLEND);
@@ -1341,7 +1317,7 @@ void sx_vid_render_frame()
         quat_t mq;
         quat_init_angle(&mq, 0, 1, 0, 0);
         float mp[] = {sx.cam.x[0], sx.cam.x[1], sx.cam.x[2]};
-        sx_vid_compute_mvp(MVP, MV, k, &mq, mp, &sx.cam, 0);
+        sx_vid_compute_mvp(MVP, MV, k, &mq, mp, &sx.cam, 0, 0);
         glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
         glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
@@ -1384,9 +1360,9 @@ void sx_vid_render_frame()
         if(sx.vid.geo[g].instances > 0)
         {
           glBindBuffer(GL_SHADER_STORAGE_BUFFER, sx.vid.geo_instance_ssbo);
-          glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, 32*sizeof(float)*sx.vid.geo[g].instances, sx.vid.geo[g].instance_mat);
-          sx.vid.geo[g].instance_offset = offset / (32*sizeof(float));
-          offset += 32*sizeof(float)*sx.vid.geo[g].instances;
+          glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, 48*sizeof(float)*sx.vid.geo[g].instances, sx.vid.geo[g].instance_mat);
+          sx.vid.geo[g].instance_offset = offset / (48*sizeof(float));
+          offset += 48*sizeof(float)*sx.vid.geo[g].instances;
         }
       }
       // actually draw
@@ -1406,7 +1382,7 @@ void sx_vid_render_frame()
         quat_init_angle(&mq, 0, 1, 0, 0);
         sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
         float mp[] = {ent->body.c[0], ent->body.c[1], ent->body.c[2]};
-        sx_vid_compute_mvp(MVP, MV, k, &mq, mp, &sx.cam, 0);
+        sx_vid_compute_mvp(MVP, MV, k, &mq, mp, &sx.cam, 0, 0);
         glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
         glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
@@ -1575,7 +1551,7 @@ void sx_vid_render_frame()
     glNamedBufferSubData(sx.vid.vbo_hud_text[0], 0, sizeof(float)*sx.vid.hud_text_chars*8, sx.vid.hud_text_vx);
     glNamedBufferSubData(sx.vid.vbo_hud_text[1], 0, sizeof(float)*sx.vid.hud_text_chars*8, sx.vid.hud_text_uv);
     // glNamedBufferSubData(sx.vid.vbo_hud_text[2], 0, sx.vid.hud_text_chars*6, sx.vid.hud_text_id);
-    glBindTextureUnit(0, sx.vid.hud_text_font);
+    glUniformHandleui64ARB(glGetUniformLocation(sx.vid.program_hud_text, "font"), sx.vid.hud_text_font);
     glBindVertexArray(sx.vid.vao_hud_text);
     glDrawElements(GL_TRIANGLES, sx.vid.hud_text_chars*6, GL_UNSIGNED_INT, 0);
     glDisable(GL_BLEND);
@@ -1613,6 +1589,9 @@ int sx_vid_handle_input()
       case SDL_KEYDOWN:
       switch(event.key.keysym.sym)
       {
+        case SDLK_p:
+          sx.paused = 1-sx.paused;
+          break;
         case SDLK_ESCAPE:
           return 1;
         case SDLK_r:
@@ -1655,6 +1634,7 @@ int sx_vid_handle_input()
             sx_camera_target(&sx.cam, pos, &q, off, 0.02f, 0.02f);
           }
           break;
+#if 0
         case SDLK_t: // top
           {
             float pos[3] = {sx.cam.x[0], 2050.0, sx.cam.x[2]};
@@ -1666,6 +1646,7 @@ int sx_vid_handle_input()
             sx_camera_target(&sx.cam, pos, &q, off, 0.02f, 0.02f);
           }
           break;
+#endif
         case SDLK_1:
           sx_heli_control_collective(sx.world.player_move, 0.1);
           break;
@@ -1708,11 +1689,31 @@ int sx_vid_handle_input()
         case SDLK_LEFT:
           sx_heli_control_cyclic_x(sx.world.player_move, -1);
           break;
-        case SDLK_a:
-          sx_heli_control_tail(sx.world.player_move, -1);
+        // left hand:
+        case SDLK_PERIOD:
+          sx_heli_control_increase_collective(sx.world.player_move, 0.1);
+          break;
+        case SDLK_e:
+          sx_heli_control_increase_collective(sx.world.player_move, -0.1);
           break;
         case SDLK_o:
+          sx_heli_control_tail(sx.world.player_move, -1);
+          break;
+        case SDLK_u:
           sx_heli_control_tail(sx.world.player_move, 1);
+          break;
+        // right hand:
+        case SDLK_h:
+          sx_heli_control_cyclic_x(sx.world.player_move, -1);
+          break;
+        case SDLK_n:
+          sx_heli_control_cyclic_x(sx.world.player_move, 1);
+          break;
+        case SDLK_c:
+          sx_heli_control_cyclic_z(sx.world.player_move, 1);
+          break;
+        case SDLK_t:
+          sx_heli_control_cyclic_z(sx.world.player_move, -1);
           break;
         case SDLK_g:
           sx_heli_control_gear(sx.world.player_move);
@@ -1729,15 +1730,19 @@ int sx_vid_handle_input()
       case SDL_KEYUP:
       switch(event.key.keysym.sym)
       {
+        case SDLK_c:
+        case SDLK_t:
         case SDLK_UP:
         case SDLK_DOWN:
           sx_heli_control_cyclic_z(sx.world.player_move, 0);
+        case SDLK_n:
+        case SDLK_h:
         case SDLK_RIGHT:
         case SDLK_LEFT:
           sx_heli_control_cyclic_x(sx.world.player_move, 0);
           break;
-        case SDLK_a:
         case SDLK_o:
+        case SDLK_u:
           sx_heli_control_tail(sx.world.player_move, 0);
           break;
       }
@@ -1745,6 +1750,7 @@ int sx_vid_handle_input()
       case SDL_JOYAXISMOTION:
       switch(event.jaxis.axis)
       {
+#if 0 // regular joystick
         case 0:
           sx_heli_control_cyclic_x(sx.world.player_move, event.jaxis.value/(float)0x7fff);
           break;
@@ -1765,6 +1771,26 @@ int sx_vid_handle_input()
         case 4:
           sx.cam.angle_right = event.jaxis.value/(float)0x7fff;
           break;
+#else // gamepad. tried with a sony playstation thing (dualshock 4). see jstest-gtk for axis number and then play with this:
+        case 3:
+          sx_heli_control_cyclic_x(sx.world.player_move, event.jaxis.value/(float)0x7fff);
+          break;
+        case 4:
+          sx_heli_control_cyclic_z(sx.world.player_move, -event.jaxis.value/(float)0x7fff);
+          break;
+        case 1:
+          sx_heli_control_increase_collective(sx.world.player_move, 0.01 * event.jaxis.value/(float)0x7fff);
+          break;
+        case 0:
+          sx_heli_control_tail(sx.world.player_move, event.jaxis.value/(float)0x7fff);
+          break;
+        case 2:
+          sx.cam.angle_right = -.5-.5*event.jaxis.value/(float)0x7fff;
+          break;
+        case 5:
+          sx.cam.angle_right = .5+.5f*event.jaxis.value/(float)0x7fff;
+          break;
+#endif
       }
       break;
       case SDL_JOYHATMOTION:
@@ -1788,7 +1814,8 @@ int sx_vid_handle_input()
       switch(event.jbutton.button)
       {
         case 0: // pretend we have a cannon:
-          sx_sound_play(sx.assets.sound+sx.mission.snd_cannon, -1);
+          // XXX need generic heli interface here too
+          sx_spawn_rocket(sx.world.entity + sx.world.player_entity);
           break;
         case 3:
           sx_heli_control_tail(sx.world.player_move, -1);

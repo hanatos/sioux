@@ -4,8 +4,13 @@ sioux is a drop-in replacement engine for the 1997 game *comanche 3*, similar
 to how gzdoom is an engine for the 1993 game doom (only that gzdoom is complete
 and working).
 
-![](screenshots/screenshot0.jpg)
-![](screenshots/screenshot1.jpg)
+![](doc/img0.jpg)
+![](doc/img1.jpg)
+![](doc/img2.jpg)
+![](doc/img3.jpg)
+![](doc/img4.jpg)
+![](doc/img5.jpg)
+![](doc/img6.jpg)
 
 back then i loved the game and was blown away by the voxel engine
 and the cohesive mood introduced into the graphics by the use of
@@ -41,11 +46,20 @@ well as the external tool ```pup/``` by vladimir stupin.
 $ ./sx
 ```
 
-For SDL2_mixer to work with fluidsynth you need to set SDL_SOUNDFONTS:
+For ```SDL2_mixer``` to work with fluidsynth you need to set ```SDL_SOUNDFONTS```:
 
 ```
 $ export SDL_SOUNDFONTS=<path to soundfonts directory>/<soundfont filename>
 ```
+
+# controls
+
+keyboard bindings are
+
+![](doc/keymap.svg)
+
+and you may want to read [the helicopter flying handbook](https://www.faa.gov/regulations_policies/handbooks_manuals/aviation/helicopter_flying_handbook/).
+
 
 # known issues
 
@@ -56,16 +70,10 @@ not playable. in particular:
 
 * no enemy ai, like, at all
 
-* loaded the scene and all objects and their textures, but pretty much none of
-them are animated or even correctly located at ground level
+* loaded the scene and all objects and their textures, but only very few
+are animated
 
-* did not implement weapons
-
-* the helicopter uses some very simplistic flight dynamics model which comes
-close to the behaviour of the original. that said even the
-original is pretty arcade.
-
-* midi file playing doesn't reflect gamestate condition yet
+* did not implement weapons (just infinite amounts of dummy rockets)
 
 # TODO items
 
@@ -73,11 +81,9 @@ original is pretty arcade.
 
 * global illumination, or some close fake
 
-* cloud rendering (i don't mean billboards, i mean ray marched clouds like in the nubis cloud rendering system)
-
 * simulate weather and winds in the terrain (maybe i'll settle for incompressible fluids here)
 
-* borrow more sophisticated flight dynamics from flightgear (let's make this game a little harder..)
+* more sophisticated flight dynamics (got aerofoil from flight gear, but rotor needs improvement)
 
 * take local winds/turbulence into account when simulating flight dynamics
 

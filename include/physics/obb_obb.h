@@ -9,6 +9,32 @@ typedef struct sx_obb_t
 }
 sx_obb_t;
 
+static inline void sx_obb_get(
+    sx_obb_t *obb,
+    const sx_entity_t *e,
+    uint32_t g,
+    uint32_t o)
+{
+  const uint32_t oi = e->objectid;
+  const float *b = sx.assets.object[oi].geo_aabb[g];
+  obb[0] = (sx_obb_t) {
+    .pos={.5f*(b[3]+b[0]), .5f*(b[4]+b[1]), .5f*(b[5]+b[2])},
+    .x={1,0,0},
+    .y={0,1,0},
+    .z={0,0,1},
+    .hsize={.5f*(b[3]-b[0]), .5f*(b[4]-b[1]), .5f*(b[5]-b[2])}};
+  // compute offset to center of aabb and transform to world space:
+  if(o != -1)
+    for(int k=0;k<3;k++)
+      obb[0].pos[k] += sx.assets.object[oi].geo_off[g][3*o+k];
+  quat_transform(&e->body.q, obb[0].pos);
+  for(int k=0;k<3;k++) obb[0].pos[k] += e->body.c[k];
+  // transform obb axes to world space, too:
+  quat_transform(&e->body.q, obb[0].x);
+  quat_transform(&e->body.q, obb[0].y);
+  quat_transform(&e->body.q, obb[0].z);
+}
+
 static inline int
 sx_collision_test_plane(
     float *rpos,    // relative position, i.e. box2.pos - box1.pos

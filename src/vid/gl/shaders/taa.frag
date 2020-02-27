@@ -88,9 +88,10 @@ void main()
 {
   ivec2 ipos = ivec2(gl_FragCoord);
   vec4 col = texelFetch(new_colour, ipos, 0);
-  // vec2 mot = texelFetch(new_motion, ipos, 0).xy;
-  vec2 mot = sample_motion(ipos);
-  vec2 old_tex_coord = tex_coord - mot;
+  vec2 mot = texelFetch(new_motion, ipos, 0).xy;
+  // vec2 mot = sample_motion(ipos);
+  // vec2 old_tex_coord = tex_coord - mot;
+  vec2 old_tex_coord = .5 + .5*mot;
 
   if(any(lessThan(old_tex_coord,    vec2(0)))
   || any(greaterThan(old_tex_coord, vec2(1.0))))
@@ -139,4 +140,6 @@ void main()
     // mix in a share of the new image
     frag_color = vec4(mix(color_prev.rgb, col.rgb, vec3(0.1)), 0);
   }
+  // DEBUG: show old screen position
+  // frag_color = vec4(old_tex_coord, 0, 0);
 }

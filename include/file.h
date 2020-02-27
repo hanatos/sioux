@@ -32,7 +32,7 @@ file_load(
   FILE *f = fopen(path, "rb");
   if(!f)
   {
-    char path2[1024];
+    char path2[1034];
     snprintf(path2, sizeof(path2), "res/%s", path);
     f = fopen(path2, "rb");
   }

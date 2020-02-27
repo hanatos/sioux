@@ -6,7 +6,7 @@
 
 #include <SDL.h>
 
-int sx_vid_init(uint32_t wd, uint32_t ht);
+int sx_vid_init(uint32_t wd, uint32_t ht, int fullscreen);
 
 void sx_vid_cleanup();
 
@@ -18,9 +18,6 @@ void sx_vid_end_mission();
 // if aabb is given, will be filled with geo aabb
 uint32_t sx_vid_init_geo(const char *filename, float *aabb);
 
-// load texture file, return count if animated, init texid
-uint32_t sx_vid_init_image(const char *filename, uint32_t *texid);
-
 // load terrain textures
 int sx_vid_init_terrain(
     const char *col, const char *hgt, const char *mat,
@@ -30,7 +27,8 @@ void sx_vid_render_frame();
 void sx_vid_render_frame_rect();
 void sx_vid_push_geo_instance(const uint32_t gi,
     const float *omvx, const quat_t *omvq,
-    const float *mvx,  const quat_t *mvq);
+    const float *mvx,  const quat_t *mvq,
+    uint32_t frame);
 
 // return if exit?
 int sx_vid_handle_input();
@@ -48,4 +46,5 @@ void sx_vid_compute_mvp(
     const quat_t *q_model,   // orientation of model (model to world quaternion)
     const float  *p_model,   // world space position of model coordinate system
     sx_camera_t  *cam,
+    int           old,       // use prev cam coordinates?
     int c3model);            // 1 if the model is a c3model (introduces more axis flips)

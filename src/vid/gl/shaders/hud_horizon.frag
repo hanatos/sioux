@@ -41,29 +41,4 @@ void main()
 {
   vec3 col = texture(render, tex_coord).rgb;
   frag_color = col;
-
-  // world space ray direction
-  float angle_x = -u_hfov * (tex_coord.x - 0.5);
-  float angle_y =  u_vfov * (tex_coord.y - 0.5);
-  // equi-angular:
-  vec3 camray = vec3(sin(angle_x)*cos(angle_y), sin(angle_y), cos(angle_x)*cos(angle_y));
-  vec3 w = normalize(quat_transform(camray, u_orient));
-
-  // draw artificial horizon, try to anti alias it a little:
-  float wd = min(400.0, u_res.y*2.0);
-  float aad = clamp(min(
-      min(abs(w.y) * wd,
-          abs(abs(w.y)-1.0) * wd),
-      min(abs(abs(w.y)-M_PI/8.0)  * wd,
-          abs(abs(w.y)-M_PI/16.0) * wd)), 0.0f, 1.0f);
-  if(aad < 1.0f)
-  {
-    // project quaternion to get yaw:
-    vec3 front = normalize(quat_transform(vec3(0.0f, 0.0f, 1.0f), u_orient));
-    front = normalize(vec3(front.x, 0.0f, front.z));
-    vec3 projray = normalize(vec3(w.x, 0.0f, w.z));
-    float d = dot(projray, front);
-    if((abs(w.y) < 0.01 && d > M_PI/4.0) || d > 0.95)
-      frag_color = mix(u_col, frag_color, aad);
-  }
 }

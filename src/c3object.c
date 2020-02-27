@@ -1,4 +1,5 @@
 #include "c3object.h"
+#include "c3model.h"
 #include "file.h"
 #include "vid.h"
 
@@ -39,6 +40,12 @@ uint32_t c3_object_load(sx_object_t *o, const char *filename)
       if(line[k] == ' ' || line[k] == '\r' || line[k] == '\n')
       { line[k] = 0; break; }
     o->geoid[o->num_geo] = sx_vid_init_geo(line, o->geo_aabb[o->num_geo]);
+    if(o->geoid[o->num_geo] != -1)
+    {
+      uint64_t len;
+      c3m_header_t *h = file_load(line, &len);
+      o->geo_off_cnt[o->num_geo] = c3m_get_child_offsets(h, o->geo_off + o->num_geo);
+    }
     o->num_geo++;
   }
   // compute parent bounding box:

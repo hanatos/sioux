@@ -11,6 +11,13 @@ do
   ./pcx $i tmp/$(basename ${i%.pcx}.png) || echo $i >> failed
 done
 
-# TODO: use ./model to extract 3do
-# TODO: need more callbacks as for coma draw call to dump obj + offsets
-# TODO: check .ai files for more extraordinary draw calls!
+make png2bc3
+
+# include high-res cockpit into comanche:
+convert \( tmp/com08.png -resize 2000x400 -transparent "#000" \) -compose over \
+        \( tmp/cc_pit.png -crop 640x240+0+240 \) \
+        -gravity north -composite com08.png
+./png2bc3 com08.png tmp/com08.bc3
+
+# use ./model to extract 3do to obj if you're interested, and ./anim for
+# animation curves.

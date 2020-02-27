@@ -2,6 +2,7 @@
 #include "sx.h"
 #include "matrix3.h"
 #include "triggers.h"
+#include "gameplay.h"
 
 #if 0
 1ft= 0.3048000m
@@ -193,7 +194,7 @@ void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
       1, 0,  0,
     },
     .root = {0.0f, 1.0f, hl->tlr[2]-0.4f},
-    .chord_length = 0.5f,
+    .chord_length = 0.6f,
     .span = 1.0f,
     .c_drag = 0.2f,
     .c_lift = 2.2f,
@@ -205,8 +206,8 @@ void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
       1, 0, 0,
     },
     .root = {0.0f, 2.1f, hl->tlr[2]-1.1f},
-    .chord_length = 0.4f,
-    .span = 1.4f,
+    .chord_length = 0.3f,
+    .span = 1.3f,
     .c_drag = 0.2f,
     .c_lift = 0.8f,
   };
@@ -217,8 +218,8 @@ void sx_heli_init(sx_heli_t *hl, sx_entity_t *ent)
       1,  0, 0,
     },
     .root = {0.0f, 2.1f, hl->tlr[2]-1.1f},
-    .chord_length = 0.4f,
-    .span = 1.4f,
+    .chord_length = 0.3f,
+    .span = 1.3f,
     .c_drag = 0.2f,
     .c_lift = 0.8f,
   };
@@ -239,11 +240,48 @@ float sx_heli_alt_above_ground(const sx_heli_t *h)
 }
 
 // TODO: will need replacement
-void sx_heli_damage(sx_entity_t *ent, float x[3], float p[3])
+void sx_heli_damage(sx_entity_t *e, const sx_entity_t *collider, float dmg)
 {
-  sx_heli_t *h = ent->move_data;
-  float new_hitpoints = h->entity->hitpoints;
-  float impulse = sqrtf(dot(h->entity->body.pv, h->entity->body.pv));
+  if(collider) return; // XXX DEBUG need to resolve collisions here first!
+
+  // terrain:
+  const float groundlevel = sx_world_get_height(e->body.c);
+  float top = /* center of mass offset?*/-4.0f-sx.assets.object[e->objectid].geo_aabb[0][1]; // just the body
+  if(e->hitpoints <= 0)
+    top = -2.5f-sx.assets.object[sx.mission.obj_dead_coma].geo_aabb[0][1]; // just the body
+  const float ht = groundlevel + top;
+
+  if(e->body.c[1] >= ht) return;
+
+  e->body.c[1] = ht;
+  e->prev_x[1] = ht;
+
+  float n[3]; // normal of terrain
+  sx_world_get_normal(e->body.c, n);
+  float up[3] = {0, 1, 0}, rg[3];
+  quat_transform(&e->body.q, up); // to world space
+  float dt = dot(up, n);
+  cross(up, n, rg);
+  // detect degenerate case where |rg| <<
+  float len = dot(rg, rg);
+  if(len > 0.02)
+  {
+    quat_t q0 = e->body.q;
+    quat_t q1;
+    quat_init_angle(&q1, acosf(fminf(1.0, fmaxf(0.0, dt))), rg[0], rg[1], rg[2]);
+    quat_normalise(&q1);
+    quat_mul(&q1, &q0, &e->body.q);
+  }
+  // remove momentum
+  for(int k=0;k<3;k++)
+    e->body.pw[k] = 0.0f;
+  e->body.pv[1] = 0.0f;
+  e->body.pv[0] *= 0.5f;
+  e->body.pv[2] *= 0.5f;
+
+  sx_heli_t *h = e->move_data;
+  float new_hitpoints = e->hitpoints;
+  float impulse = sqrtf(dot(e->body.pv, e->body.pv));
   if(impulse > 15000.0) // impulse in meters/second * kg
   {
     // TODO: more selective damage
@@ -257,7 +295,7 @@ void sx_heli_damage(sx_entity_t *ent, float x[3], float p[3])
     }
     else
     {
-      sx_sound_play(sx.assets.sound + sx.mission.snd_hit, -1);
+      sx_sound_play(sx.assets.sound + sx.mission.snd_scrape, -1);
       new_hitpoints -= 5;
       if(impulse > 50000.0)
         new_hitpoints -= 100;
@@ -265,7 +303,7 @@ void sx_heli_damage(sx_entity_t *ent, float x[3], float p[3])
   }
   // TODO: lose trigger
   // died
-  if(new_hitpoints <= 0.0 && h->entity->hitpoints > 0.0)
+  if(new_hitpoints <= 0.0 && e->hitpoints > 0.0)
   {
     sx_sound_play(sx.assets.sound + sx.mission.snd_explode, -1);
     sx.cam.mode = s_cam_rotate;
@@ -274,8 +312,13 @@ void sx_heli_damage(sx_entity_t *ent, float x[3], float p[3])
     char filename[32];
     c3_triggers_parse_music(filename, sx.mission.music, C3_GAMESTATE_LOSE, 'f');
     sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), -1);
+    uint32_t eid = sx_spawn_fire(e);
+    quat_t q, p;
+    quat_init_angle(&q, M_PI/2.0, 0, 1, 0);
+    p = sx.world.entity[eid].body.q;
+    quat_mul(&p, &q, &sx.world.entity[eid].body.q);
   }
-  h->entity->hitpoints = new_hitpoints;
+  e->hitpoints = new_hitpoints;
 }
 
 void sx_heli_update_forces(sx_entity_t *ent, sx_rigid_body_t *b)

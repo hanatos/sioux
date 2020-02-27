@@ -27,12 +27,10 @@ debug: all
 HEADERS=include/assets.h\
         include/bc3io.h\
         include/camera.h\
-        include/comanche.h\
         include/c3mission.h\
         include/c3pos.h\
         include/c3jim.h\
         include/c3model.h\
-        include/comanche.h\
         include/decompress.h\
         include/file.h\
         include/gameplay.h\
@@ -47,8 +45,6 @@ HEADERS=include/assets.h\
         include/physics/heli.h\
         include/physics/accel.h\
         include/plot/common.h\
-        include/plot/helo.h\
-        include/plot/tire.h\
         include/move/common.h\
         include/world.h\
         include/triggers.h
@@ -69,11 +65,23 @@ SX_FILES=src/sx.c\
          src/move/helo.c\
          src/move/boom.c\
          src/move/rock.c\
-         src/world.c
+         src/plot/1prt.c\
+         src/plot/coma.c\
+         src/plot/helo.c\
+         src/plot/tire.c\
+         src/plot/wolf.c\
+         src/plot/glue.c\
+         src/world.c\
+         src/main.c
 
 # opengl vid module:
 HEADERS+=include/vid/gl/vid.h src/vid/gl/terrain.h
 SX_FILES+= src/vid/gl/vid.c
+
+SX_OBJ=$(patsubst %.c,%.o,$(SX_FILES))
+
+%.o:%.c $(HEADERS) Makefile
+	$(CC) $(CFLAGS) $(SDL_C) $< -c -o $@
 
 pcx: tools/pcx.c Makefile include/decompress.h include/file.h include/pngio.h include/bc3io.h include/pcxread.h
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
@@ -87,8 +95,8 @@ model: tools/model.c include/file.h include/c3model.h Makefile
 anim: tools/anim.c include/file.h include/c3model.h Makefile
 	$(CC) $(CFLAGS) $< -o $@
 
-sx: src/main.c $(SX_FILES) $(HEADERS) Makefile
-	$(CC) $(CFLAGS) $(SDL_C) $< $(SX_FILES) -o $@ $(LDFLAGS) $(SDL_L)
+sx: $(SX_OBJ) Makefile
+	$(CC) $(SX_OBJ) -o $@ $(LDFLAGS) $(SDL_L)
 
 clean:
-	rm -f pcx model anim sx
+	rm -f pcx model anim sx $(SX_OBJ)

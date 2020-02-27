@@ -11,6 +11,8 @@ typedef struct sx_object_t
   uint32_t geo_g, geo_d, geo_s; // green desert snow
   uint32_t geo_h, geo_m, geo_l; // entry points for medium and low geo lists
   uint32_t geoid[100];
+  float *geo_off[100];          // every geometry (3do file) stores child offsets
+  int geo_off_cnt[100];
   char draw[4];        // draw call id ("plot routine")
   char dram[4];        // medium..
   char dral[4];        // ..low detail variant

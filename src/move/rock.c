@@ -9,6 +9,7 @@
 typedef struct sx_move_rock_t
 {
   int fuel;
+  float last_p[3];
 }
 sx_move_rock_t;
 
@@ -34,16 +35,24 @@ sx_move_rock_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
 }
 
 void
-sx_move_rock_damage(sx_entity_t *e, float x[], float p[])
+sx_move_rock_damage(sx_entity_t *e, const sx_entity_t *c, float dmg)
 {
-  // sx_move_rock_t *r = e->move_data;
-  // TODO: deal damage?
-  // TODO: if height < terrain, spawn dirt explosion instead
-  sx_spawn_explosion(e); // spawn explosion
-  // and a few chunks of debris
-  // XXX do that on the other object, or else they continue to fly with the rocket
-  // for(int i=0;i<10;i++) sx_spawn_debris(e);
-  sx_world_remove_entity(e - sx.world.entity); // remove us
+  // deal only with terrain, the others will collide against us
+  if(!c)
+  {
+    const float groundlevel = sx_world_get_height(e->body.c);
+    const float top = -sx.assets.object[e->objectid].aabb[1];
+    const float ht = groundlevel + top;
+    if(e->body.c[1] >= ht) return;
+    // sx_move_rock_t *r = e->move_data;
+    // TODO: deal damage?
+    // TODO: if height < terrain, spawn dirt explosion instead
+    sx_spawn_explosion(e); // spawn explosion
+    // and a few chunks of debris
+    // XXX do that on the other object, or else they continue to fly with the rocket
+    // for(int i=0;i<10;i++) sx_spawn_debris(e);
+    sx_world_remove_entity(e - sx.world.entity); // remove us
+  }
 }
 
 // 
@@ -53,6 +62,13 @@ sx_move_rock_think(sx_entity_t *e)
   sx_move_rock_t *r = e->move_data;
   // run out of fuel after a while and then fall down and explode later
   if(r->fuel > 0) r->fuel--;
+  if((r->fuel & 7) == 7)
+  {
+    if(r->last_p[0] != -1.0)
+      sx_spawn_trail(e, r->last_p);
+    for(int k=0;k<3;k++)
+      r->last_p[k] = e->body.c[k];
+  }
 }
 
 void
@@ -60,13 +76,7 @@ sx_move_rock_init(sx_entity_t *e)
 {
   sx_move_rock_t *r = malloc(sizeof(*r));
   r->fuel = 100;
+  for(int k=0;k<3;k++) r->last_p[k] = -1.0;
   e->move_data = r;
-  e->move = (sx_move_t){
-    .id            = "rock",
-    .update_forces = sx_move_rock_update_forces,
-    .damage        = sx_move_rock_damage,
-    .think         = sx_move_rock_think,
-    .snd_ambient   = sx_assets_load_sound(&sx.assets, "missile.wav"),
-  };
 }
 

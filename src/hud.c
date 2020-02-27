@@ -140,20 +140,22 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
   // quat_transform(&heli->entity->body.q, head);
   quat_transform(&sx.cam.q, head);
   const float heading = atan2f(-head[0], head[2]);
-  // text is in NDC, not svg size
-  // find next north marker to the left of our screen in NDC coordinates:
-  float north = -heading * 2.0f / sx.cam.hfov;
+  // text is in NDC
   snprintf(timestr, sizeof(timestr), "%03d", ((int)(360+180.0f/M_PI*heading))%360);
   textpos = sx_vid_hud_text(timestr, textpos, 0.0f, 0.9f, 1, 0);
+  // find north (=0 angle) to the left of our screen in NDC coordinates:
+  float north = -heading * 2.0f / sx.cam.hfov;
   const float thirty = 2.0f/sx.cam.hfov * M_PI/6.0f;
   const float five   = 2.0f/sx.cam.hfov * M_PI/36.0f;
-  if(north+12*thirty <  1.0f) north += 2.0f*M_PI * 2.0f / sx.cam.hfov;
-  if(north           > -1.0f) north -= 2.0f*M_PI * 2.0f / sx.cam.hfov;
-  const char *compass_text[] = { "N", "030", "060", "E", "120", "150", "S", "210", "240", "W", "300", "330"};
+  if(north+12*thirty <  1.0f) north += 12 * thirty;
+  if(north           > -1.0f) north -= 12 * thirty;
+  const char *compass_text[] = {
+    "N", "030", "060", "E", "120", "150",
+    "S", "210", "240", "W", "300", "330"};
   for(int k=0;k<24;k++)
     textpos = sx_vid_hud_text(compass_text[k%12], textpos,
         north + k * thirty, 0.80, 1, 0);
-  for(int k=0;k<144;k+=2)
+  for(int k=0;k<288;k+=2)
   {
     int tick = k/2;
     hud->lines[2*i+0] = north + tick * five;
@@ -180,7 +182,7 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
     float MVP[16], MV[16], wph[4] = {0, 0, 0, 1};
     quat_t nop;
     quat_init(&nop, 0, 1, 0, 0);
-    sx_vid_compute_mvp(MVP, MV, -1, &nop, wp, &sx.cam, 0);
+    sx_vid_compute_mvp(MVP, MV, -1, &nop, wp, &sx.cam, 0, 0);
     mat4_mulv(MVP, wph, wp);
     if(wp[2] < 0) continue; // discard behind camera
     for(int k=0;k<3;k++) wp[k] /= wp[3];
@@ -210,6 +212,59 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
     i += circle(cx, cy, 0.05f, hud->lines+2*i, 13, p);
   }
   HUD_END(s_hud_waypoint)
+
+  HUD_BEG(s_hud_center)
+  // where does the nose of the helicopter point to wrt artificial horizon?
+  // coordinates are NDC [-1,1]^2
+  { // first draw artificial horizon lines by drawing worldspace directions
+    sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
+    float MVP[16], MV[16], x0[4], x1[4];
+    // find quaternion that only encodes yaw
+    float front[3] = {0, 0, 1};
+    quat_transform(&ent->body.q, front); // to world space
+    float angle = atan2f(front[0], front[2]);
+    quat_t q1;
+    quat_init_angle(&q1, angle, 0, 1, 0);
+    sx_vid_compute_mvp(MVP, MV, -1, &q1, sx.cam.x, &sx.cam, 0, 0);
+    const float wd[] = {4.f, 1.f, 1.f, 2.f, 1.f, 1.f, 2.f, 1.f, .5f};
+    for(int h=-8;h<=8;h++)
+    {
+      float a = M_PI*h*10.0/180.0f;
+      float p0[4] = {-wd[abs(h)], 10*sinf(a), 10*cosf(a), 1};
+      float p1[4] = { wd[abs(h)], 10*sinf(a), 10*cosf(a), 1};
+      mat4_mulv(MVP, p0, x0);
+      mat4_mulv(MVP, p1, x1);
+      if(x0[2] < 0 || x1[2] < 0) continue; // discard behind camera
+      for(int k=0;k<3;k++) x0[k] /= x0[3];
+      for(int k=0;k<3;k++) x1[k] /= x1[3];
+      hud->lines[2*i+0] = x0[0];
+      hud->lines[2*i+1] = x0[1];
+      hud->lines[2*i+2] = x1[0];
+      hud->lines[2*i+3] = x1[1];
+      i+=2;
+    }
+  }
+  { // then draw center where helicopter nose is pointing to
+    float MVP[16], MV[16], ph[4] = {0, 0, 10, 1}, p[4];
+    sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
+    sx_vid_compute_mvp(MVP, MV, -1, &ent->body.q, sx.cam.x, &sx.cam, 0, 0);
+    mat4_mulv(MVP, ph, p);
+    const float cursor[] = {
+      -0.1f, 0.f, -0.04f, 0.f, -0.04f, 0.f, -0.04f, -0.04f,
+       0.1f, 0.f,  0.04f, 0.f,  0.04f, 0.f,  0.04f, -0.04f};
+    int size = sizeof(cursor)/sizeof(cursor[0]);
+    if(p[2] > 0) // discard behind camera
+    {
+      for(int k=0;k<3;k++) p[k] /= p[3];
+      for(int k=0;k<size;k+=2)
+      {
+        hud->lines[2*i+k  ] = cursor[k]   + p[0];
+        hud->lines[2*i+k+1] = cursor[k+1] + p[1];
+      }
+      i += size/2;
+    }
+  }
+  HUD_END(s_hud_center)
   hud->num_lines = i;
 #undef HUD_BEG
 #undef HUD_END

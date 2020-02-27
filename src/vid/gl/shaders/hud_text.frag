@@ -1,9 +1,10 @@
 #version 450
+#extension GL_ARB_bindless_texture : require
 
 in vec2 tex_uv;
 in vec3 colour;
 out vec4 frag_color;
-layout(binding = 0) uniform sampler2D font;
+layout(bindless_sampler) uniform sampler2D font;
 
 void main()
 {

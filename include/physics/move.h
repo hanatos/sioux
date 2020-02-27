@@ -14,7 +14,7 @@ typedef struct sx_entity_t sx_entity_t;
 // callback?
 // still need to pipe back the feedback which point was collided (to do damage)
 // excert some force can be done via generic rigid body interface
-typedef void (*sx_move_damage_t)(sx_entity_t *e, float x[3], float p[3]);
+typedef void (*sx_move_damage_t)(sx_entity_t *e, const sx_entity_t *c, float dmg);
 
 // user input controller? SDL_Event? abstraction?
 

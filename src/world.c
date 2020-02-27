@@ -3,10 +3,8 @@
 #include "physics/heli.h"
 #include "physics/accel.h"
 #include "physics/obb_obb.h"
+#include "plot/common.h"
 #include "pngio.h"
-#include "comanche.h"
-#include "plot/helo.h"
-#include "plot/tire.h"
 #include "gameplay.h"
 
 #include <stdint.h>
@@ -71,51 +69,21 @@ sx_world_move_entity(
   if(!e->move_data) return;
   if(!e->move.update_forces) return;
 
-  uint64_t coll_ent[10];
-  uint64_t coll_cnt = 10;
-  float aabb[6]; // world space aabb
-  const int eid = e - sx.world.entity;
-  compute_one_aabb(eid, aabb);
-  coll_cnt = accel_collide(sx.world.bvh, aabb, eid, coll_ent, coll_cnt);
-  sx_obb_t box1;
-  if(coll_cnt)
+  if(sx.assets.object[e->objectid].collidable)
   {
-    const float *aabb = sx.assets.object[e->objectid].aabb; // this is the combined box
-    box1 = (sx_obb_t) {
-      .pos = {.5f*(aabb[0]+aabb[3]), .5f*(aabb[1]+aabb[4]), .5f*(aabb[2]+aabb[5])},
-      .x = {1, 0, 0},
-      .y = {0, 1, 0},
-      .z = {0, 0, 1},
-      .hsize = {.5f*(aabb[3]-aabb[0]), .5f*(aabb[4]-aabb[1]), .5f*(aabb[5]-aabb[2])}};
-    quat_transform(&e->body.q, box1.x);
-    quat_transform(&e->body.q, box1.y);
-    quat_transform(&e->body.q, box1.z);
-  }
-  for(int i=0;i<coll_cnt;i++)
-  {
-    // TODO: get all obb of all objects, and their offsets from the plot routine :(
-    sx_entity_t *e2 = sx.world.entity+coll_ent[i];
-    const float *aabb = sx.assets.object[e2->objectid].aabb; // this is the combined box
-    sx_obb_t box2 = {
-      .pos = {.5f*(aabb[0]+aabb[3]), .5f*(aabb[1]+aabb[4]), .5f*(aabb[2]+aabb[5])},
-      .x = {1, 0, 0},
-      .y = {0, 1, 0},
-      .z = {0, 0, 1},
-      .hsize = {.5f*(aabb[3]-aabb[0]), .5f*(aabb[4]-aabb[1]), .5f*(aabb[5]-aabb[2])}};
-    quat_transform(&e2->body.q, box2.x);
-    quat_transform(&e2->body.q, box2.y);
-    quat_transform(&e2->body.q, box2.z);
-    if(sx_collision_test_obb_obb(&box1, &box2))
+    uint64_t coll_ent[10];
+    uint64_t coll_cnt = 10;
+    float aabb[6]; // world space aabb
+    const int eid = e - sx.world.entity;
+    compute_one_aabb(eid, aabb);
+    coll_cnt = accel_collide(sx.world.bvh, aabb, eid, coll_ent, coll_cnt);
+    for(int i=0;i<coll_cnt;i++)
     {
-      fprintf(stderr, "collision %ld with %ld obj : %ld %s -- %s\n",
-          e - sx.world.entity,
-          coll_cnt,
-          coll_ent[i],
-          sx.assets.object[e->objectid].filename,
-          sx.assets.object[e2->objectid].filename);
+      sx_entity_t *e2 = sx.world.entity+coll_ent[i];
+      if(sx.assets.object[e2->objectid].projectile)
+        if(e->move.damage)
+          e->move.damage(e, e2, 0.0f);
     }
-    //   // TODO: resolve collision, deal damage to both
-    //   sx_spawn_explosion(sx.world.entity + coll_ent[i]);
   }
 
   for(int k=0;k<3;k++)
@@ -146,11 +114,7 @@ sx_world_move_entity(
 
 static int
 sx_world_collide_terrain(
-    sx_entity_t *e) // use only coarse aabb
-    // we'll resolve this internally i think:
-    // float n[3],           // contact normal TODO: what space
-    // float x[3],           // contact point  TODO: what space?
-    // float o[3])           // offset to resolve interpenetration TODO: what space? ws?
+    sx_entity_t *e)
 {
   if(!e->move_data) return 0;
   if(!e->move.update_forces) return 0;
@@ -162,43 +126,12 @@ sx_world_collide_terrain(
   // TODO: damage relevant points? define in interface?
   // TODO: could also have points for gear/docking etc
 
+  // TODO: maybe need to delegate to individual move routines
   // hard clamp and set external forces to 0?
-  sx_rigid_body_t *body = &e->body;
-  const float groundlevel = sx_world_get_height(body->c);
-  // TODO: none of this considers rotation, bounding boxes, etc:
-  const float top = /* center of mass offset?*/-4.0f-sx.assets.object[e->objectid].geo_aabb[0][1]; // just the body
-  const float ht = groundlevel + top;
-
-  if(body->c[1] >= ht) return 0;
 
   // fprintf(stderr, "bam! %g %g %g vv %g\n", body->c[1], groundlevel, ht, body->pv[1]);
   if(e->move.damage) e->move.damage(e, 0, 0);
-  // heavily dampen non-up orientation:
-  body->c[1] = ht;
-  e->prev_x[1] = ht;
 
-  float n[3]; // normal of terrain
-  sx_world_get_normal(body->c, n);
-  float up[3] = {0, 1, 0}, rg[3];
-  quat_transform(&body->q, up); // to world space
-  float dt = dot(up, n);
-  cross(up, n, rg);
-  // detect degenerate case where |rg| <<
-  float len = dot(rg, rg);
-  if(len > 0.2)
-  {
-    quat_t q0 = body->q;
-    quat_t q1;
-    quat_init_angle(&q1, acosf(fminf(1.0, fmaxf(0.0, dt))), rg[0], rg[1], rg[2]);
-    quat_normalise(&q1);
-    quat_mul(&q1, &q0, &body->q);
-  }
-  // remove momentum
-  for(int k=0;k<3;k++)
-    body->pw[k] = 0.0f;
-  body->pv[1] = 0.0f;
-  body->pv[0] *= 0.5f;
-  body->pv[2] *= 0.5f;
   return 1;
 }
 
@@ -303,52 +236,18 @@ void sx_world_render_entity(uint32_t ei)
   uint32_t oi = sx.world.entity[ei].objectid;
   if(oi < 0 || oi >= sx.assets.num_objects) return;
 
+  const sx_entity_t *ent = sx.world.entity+ei;
   // LOD: discard stuff > 2km
   float d[3], md = 2000;
-  for(int k=0;k<3;k++) d[k] = sx.world.entity[ei].body.c[k] - sx.cam.x[k];
+  for(int k=0;k<3;k++) d[k] = ent->body.c[k] - sx.cam.x[k];
   if(dot(d, d) > md*md) return;
 
   if(//sx.cam.mode == s_cam_inside_cockpit ||
      sx.cam.mode == s_cam_inside_no_cockpit)
     if(ei == sx.world.player_entity) return;
-  // TODO: optimise down to one uint32_t comparison:
-  // TODO: and support more draw calls
-  const char *dr = sx.assets.object[oi].draw;
-  if(!strncmp(dr, "edit", 4)) return; // only visible in edit mode
-  if(!strncmp(dr, "coma", 4))
-  {
-    // delegate to comanche drawing routine (with alpha for rotor and so on)
-    // this one also knows the center of mass vs. zero in model coordinates
-    // TODO: other move for other helis
-    return sx_coma_render(ei, sx.world.player_move);
-  }
-  if(!strncmp(dr, "helo", 4))
-  {
-    return sx_plot_helo(ei);
-  }
-  if(!strncmp(dr, "tire", 4))
-  {
-    return sx_plot_tire(ei);
-  }
 
-  // fprintf(stderr, "rendering entity oid: %u/%u\n", oi, sx.assets.num_objects);
-  sx_entity_t *e = sx.world.entity + ei;
-
-  const quat_t *mq = &e->body.q;
-  const quat_t *omq = &e->prev_q;
-  const float *mp = e->body.c;
-  const float *omp = e->prev_x;
-
-  sx_object_t *obj = sx.assets.object + oi;
-
-  // TODO: determine LOD h m l?
-  // const int lod = 0;
-  // TODO: desert snow or green?
-  int geo_beg = obj->geo_g + obj->geo_h;
-  int geo_end = MAX(geo_beg+1, obj->geo_g + obj->geo_m);
-
-  for(int g=geo_beg;g<geo_end;g++)
-    sx_vid_push_geo_instance(obj->geoid[g], omp, omq, mp, mq);
+  if(ent->plot.plot)
+    ent->plot.plot(ei);
 }
 
 float
@@ -414,9 +313,8 @@ sx_world_remove_entity(
 uint32_t
 sx_world_add_entity(
     uint32_t objectid,   // 3d model to link to
-    uint32_t dead_oid,   // object of destroyed entity
-    float *p,            // position
-    quat_t *q,           // orientation
+    const float *p,      // position
+    const quat_t *q,     // orientation
     char id,             // mission relevant id
     uint8_t camp)        // good guy, bad guy, neutral
 {
@@ -427,7 +325,6 @@ sx_world_add_entity(
 
   // geometry stuff:
   sx.world.entity[eid].objectid = objectid;
-  sx.world.entity[eid].dead_objectid = dead_oid;
   sx.world.entity[eid].id = id;
   sx.world.entity[eid].camp = camp;
   sx.world.entity[eid].hitpoints = sx.assets.object[objectid].hitpoints;
@@ -468,6 +365,8 @@ sx_world_add_entity(
   sx.world.entity[eid].body.invI[4] = 3.0f/8.0f / (rho * h * (w * l*l*l + l * w*w*w));
   sx.world.entity[eid].body.invI[8] = 3.0f/8.0f / (rho * l * (w * h*h*h + h * w*w*w));
 
+  sx_move_init(sx.world.entity + eid);
+  sx_plot_init(sx.world.entity + eid);
   // fprintf(stderr, "[world] new entity %u\n", eid);
   return eid;
 }

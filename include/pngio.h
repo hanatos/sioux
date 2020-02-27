@@ -202,6 +202,18 @@ png_read(
     png_read_row(png_ptr, row_pointer, NULL);
     row_pointer += rowbytes;
   }
+  // add alpha channel in case it's missing:
+  if(!(color_type & PNG_COLOR_MASK_ALPHA))
+  {
+    uint8_t *buf = *ovoid;
+    for(int y=*height-1;y>=0;y--) for(int x=*width-1;x>=0;x--)
+    {
+      buf[4*(y**width+x)+0] = buf[3*(y**width+x)+0];
+      buf[4*(y**width+x)+1] = buf[3*(y**width+x)+1];
+      buf[4*(y**width+x)+2] = buf[3*(y**width+x)+2];
+      buf[4*(y**width+x)+3] = 255;
+    }
+  }
 
   png_read_end(png_ptr, info_ptr);
   png_destroy_read_struct(&png_ptr, &info_ptr, NULL);

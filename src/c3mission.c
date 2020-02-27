@@ -63,7 +63,7 @@ c3_mission_begin(
     // read orientation
     const float heading = 2.0f*M_PI*f[i].heading/(float)0xffff;
     quat_from_euler(&q, 0, 0, heading);
-    uint32_t eid = sx_world_add_entity(objectid, objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i));
+    uint32_t eid = sx_world_add_entity(objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i));
     // wire move routines:
     if(!strncmp(sx.assets.object[objectid].move, "helo", 4))
     {
@@ -96,17 +96,8 @@ c3_mission_begin(
   const uint32_t player_objectid = 0; // XXX get this while reading the assets!
   float *pos = sx.world.entity[startposid].body.c;
   q = sx.world.entity[startposid].body.q;
-  // add assets: deadcoma.ai and flames.ai:
-  const uint32_t dead_player_oid = sx_assets_load_object(&sx.assets, "deadcoma", 1);
   // add player entity and attach camera and movement controller:
-  uint32_t eid = sx_world_add_entity(player_objectid, dead_player_oid, pos, &q,
-      sx.world.entity[startposid].id, sx.world.entity[startposid].camp);
-
-  const uint32_t flames = sx_assets_load_object(&sx.assets, "fire", 1);
-  sx.world.fire_entity = sx_world_add_entity(flames, flames, pos,
-      // this is 90 deg rotated around z at least
-      &q,
-      // XXX ??? probably 0 0 1
+  uint32_t eid = sx_world_add_entity(player_objectid, pos, &q,
       sx.world.entity[startposid].id, sx.world.entity[startposid].camp);
 
   // setup start position:
@@ -354,6 +345,7 @@ c3_mission_load(
   mis->snd_fire    = sx_assets_load_sound(&sx.assets, "fire.wav");
   mis->snd_hit     = sx_assets_load_sound(&sx.assets, "hitbymis.wav");
   mis->snd_explode = sx_assets_load_sound(&sx.assets, "explode.wav");
+  mis->snd_scrape  = sx_assets_load_sound(&sx.assets, "scrape.wav");
 
   // remember indices of dynamic objects
   mis->obj_fire           = sx_assets_load_object(&sx.assets, "fire", 1);
@@ -365,6 +357,9 @@ c3_mission_load(
   mis->obj_stinger        = sx_assets_load_object(&sx.assets, "stinger", 1);
   mis->obj_hellfire       = sx_assets_load_object(&sx.assets, "hellfire", 1);
   mis->obj_bullet         = sx_assets_load_object(&sx.assets, "tracer", 1);
+  mis->obj_trail          = sx_assets_load_object(&sx.assets, "trail", 1);
+  mis->obj_dead_coma      = sx_assets_load_object(&sx.assets, "deadcoma", 1);
+  mis->obj_dead_copt      = sx_assets_load_object(&sx.assets, "deadcopt", 1);
 
   // it follows: triggers (see triggers.h)
   return c3_triggers_parse(mis, f);

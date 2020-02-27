@@ -21,11 +21,13 @@ typedef struct sx_t
   uint32_t width, height;
 
   uint32_t time;         // time in milliseconds
+  uint32_t paused;       // 1 if paused, 0 otherwise
+  float    lod;          // level of detail
 }
 sx_t;
 
 extern sx_t sx;
 
-int sx_init();
+int sx_init(int argc, char *argv[]);
 
 void sx_cleanup();

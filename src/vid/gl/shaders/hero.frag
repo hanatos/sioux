@@ -1,27 +1,45 @@
 #version 440
+#extension GL_ARB_bindless_texture : require
+#extension GL_NV_gpu_shader5 : enable
+
 #define M_PI 3.1415926535897932384626433832795
 in vec3 shading_normal;
 in vec3 position_cs;
 in vec4 old_pos4;
-in vec2 motion;
-in vec3 tex_uv;
+in vec2 tex_uv;
+in flat uvec2 id;
+uniform vec2 u_terrain_bounds;
 uniform vec3 u_sun; // direction towards sun
 uniform float u_lod;
 uniform float u_hfov;
 uniform int u_frame;
 uniform vec3 u_pos_ws;
 layout(binding = 0) uniform sampler2D render;
-layout(binding = 1) uniform sampler2D tex1;
-layout(binding = 2) uniform sampler2D tex2;
-layout(binding = 3) uniform sampler2D tex3;
-layout(binding = 4) uniform sampler2D tex4;
-layout(binding = 5) uniform sampler2D tex5;
-layout(binding = 6) uniform sampler2D tex6;
-layout(binding = 7) uniform sampler2D tex7;
-layout(binding = 8) uniform sampler2D tex8;
-layout(binding = 9) uniform sampler2D tex_mat;
+
+struct material_t
+{
+  uint64_t tex_handle;
+  uint dunno0;
+  uint dunno1;
+  uint dunno2;
+  uint dunno3;
+};
+layout(std430,binding=1) buffer geo_material
+{
+  material_t mat[];
+};
+layout(std430,binding=2) buffer geo_anim
+{
+  uint b_anim[];
+};
 layout(location = 0) out vec4 out_colour;
 layout(location = 1) out vec2 out_motion; // output old fragment position
+
+// layout(std140, binding = 0) uniform frameBuffer {
+//     // Here are all frameBuffer's renderTarget
+//     sampler2D gBufferNormal; // uint64_t from host
+// };
+// layout(bindless_sampler) uniform sampler2D bindless;
 
 void
 encrypt_tea(inout uvec2 arg)
@@ -44,13 +62,12 @@ encrypt_tea(inout uvec2 arg)
 }
 
 const vec3 k_fog_col = vec3(0.4,0.6,1.15);
-const float k_waterlevel = -70.0;
 // return transmittance of atmosphere
 float atmosphere(vec3 p, vec3 w, float t)
 {
-  const float d0 = .0001f, d1 = 0.005;
-  const float b0 = d0 * exp(-d1*(p.y-k_waterlevel));
-  const float b1 = d1*((p.y-k_waterlevel)/t + w.y);
+  const float d0 = .08, d1 = 0.8;
+  const float b0 = d0 * exp(-d1*(p.y-u_terrain_bounds.x));
+  const float b1 = d1*((p.y-u_terrain_bounds.x)/t + w.y);
   return exp(-b0/b1 * (1.0f - exp(-b1*t)));
 }
 
@@ -179,6 +196,9 @@ void main()
   // const float cos_wo = dot(wo, n);
 
   vec3 col = vec3(0);
+  vec4 diffcol = vec4(0.0, 0, 0, 1);
+  uint matb = id.x;
+  uint inst = id.y;
 
   // highlight from direct sun:
   // TODO: shadowing! (pass in as uniform?)
@@ -188,50 +208,36 @@ void main()
   const vec2 r = vec2(0.1, 0.1); // roughness
   const float fr = brdf(-wi, wo, n, Tx, Ty, r);
   col += fr * L_sun;
+  col += vec3(pow((n.y+1)/2.0, 2));
   // col = vec3(pow(abs(dot(-wi, n)), 2));
-  col = vec3(pow((n.y+1)/2.0, 2));
+  if((mat[matb].dunno0>>24) > 0) // explosions etc with static light
+    col = vec3(1);
 
-  const vec3 ref = reflect(wi, n);
+  // const vec3 ref = reflect(wi, n);
 
-  vec4 diffcol = vec4(0.0, 0, 0, 1);
-  // nvidia gpus seem to require the additional rounding
-  uint matb = uint(round(tex_uv.z));
-
-  uint material = uint(round(255*texelFetch(tex_mat, ivec2(0, matb), 0).r));
-  // if(material == 0) discard;
-  if(material == 1)
-    diffcol = texture(tex1, tex_uv.xy);
-  if(material == 2)
-    diffcol = texture(tex2, tex_uv.xy);
-  else if(material == 3)
-    diffcol = texture(tex3, tex_uv.xy);
-  else if(material == 4)
-    diffcol = texture(tex4, tex_uv.xy);
-  else if(material == 5)
-    diffcol = texture(tex5, tex_uv.xy);
-  else if(material == 6)
-    diffcol = texture(tex6, tex_uv.xy);
-  else if(material == 7)
-    diffcol = texture(tex7, tex_uv.xy);
-  else if(material == 8)
-    diffcol = texture(tex8, tex_uv.xy);
-  else if(material == 255)
-  {
-    // muzzle flash
-    if(texelFetch(tex_mat, ivec2(4, matb), 0).b > 0) discard;
-    // window glass
-    if(texelFetch(tex_mat, ivec2(3, matb), 0).a > 0)
-    {
+  uint anim = (mat[matb].dunno3>>8) & 0xff;
+  if(anim > 0) matb = matb + ((b_anim[id.y]) % anim);
+  uint64_t th = mat[matb].tex_handle;
+  if(th != -1)
+    diffcol = texture(sampler2D(th), tex_uv.xy);
+  else
+  { // no texture
+    uint trans = (mat[matb].dunno2>>24) & 0xff;
+    if(trans > 0)
+    { // window glass
       diffcol = vec4(0.9, 0.4, 0.1, 0.2);
       if(dot(-wi, n) < 0) discard; // hide backfacing
     }
     // radar nose colour:
-    else diffcol.rgb = texelFetch(tex_mat, ivec2(2, matb), 0).rgb;
+    else diffcol.rgb = unpackUnorm4x8(mat[matb].dunno1).rgb;
   }
-  // fake indirect diffuse
-  const vec3 L_sky = vec3(0.5);// XXX  * diffenv(ref, 8).rgb;
-  const float cos_wi = max(0.0, -dot(wi, n));
-  col *= diffcol.rgb;//L_sky * cos_wi * diffcol;
+  // if((mat[matb].dunno0>>24) > 0)
+  {
+    // fake indirect diffuse
+    const vec3 L_sky = vec3(0.5);// XXX  * diffenv(ref, 8).rgb;
+    const float cos_wi = max(0.0, -dot(wi, n));
+    col *= diffcol.rgb;//L_sky * cos_wi * diffcol;
+  }
 
   // stochastic alpha
   uvec2 seed = uvec2(u_frame, 1337*gl_FragCoord.x+19937*gl_FragCoord.y);//uint(1337*tex_uv.x + 19937*(tex_uv.y+1)));
@@ -245,8 +251,8 @@ void main()
   out_colour.rgb = col;//tau * col + (1-tau)*k_fog_col;
   out_colour.w = diffcol.w;
 
-  // motion:
-  // output fragment position instead of motion vector here
+  // output motion vector:
+  // out_motion = gl_FragCoord.xy - old_pos4.xy / old_pos4.w;
   out_motion = old_pos4.xy / old_pos4.w;
 }
 

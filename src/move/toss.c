@@ -36,7 +36,7 @@ sx_move_toss_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
 }
 
 void
-sx_move_toss_damage(sx_entity_t *e, float x[], float p[])
+sx_move_toss_damage(sx_entity_t *e, const sx_entity_t *c, float dmg)
 {
   // TODO: wire
 }
@@ -57,12 +57,5 @@ sx_move_toss_init(sx_entity_t *e)
   memset(r, 0, sizeof(*r));
   e->move_data = r;
   r->timeout = 200;
-  e->move = (sx_move_t){
-    .id            = "toss",
-    .update_forces = sx_move_toss_update_forces,
-    .damage        = sx_move_toss_damage,
-    .think         = sx_move_toss_think,
-    // .snd_ambient   = sx_assets_load_sound(&sx.assets, "comanche.wav"),
-  };
 }
 

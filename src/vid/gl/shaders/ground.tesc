@@ -31,8 +31,7 @@ float level(vec2 v0, vec2 v1)
   // this is with the 16x16 characters:
   // const float k_terrain_pixel_scale = 1.0f/(16.0*1024.0/(3.0*0.3048*2048.0));
   // const float k_terrain_pixel_scale = 16.0f/(16.0*1024.0/(3.0*0.3048*2048.0));
-  // return clamp(distance(v0, v1)/u_lod, 1, 64);
-  return clamp(distance(v0, v1)/4.0f, 1, 64);
+  return clamp(distance(v0, v1)/u_lod, 1, 20);
 }
 
 void main()

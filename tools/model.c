@@ -19,10 +19,22 @@ int main(int argc, char *argv[])
   // xmax xmin, ymax ymin, zmax zmin
   // only that it appears y is up (maybe obj -> blender flips axes)
   fprintf(stderr, "header bits:\n");
-  fprintf(stderr, "%d ", h->dunno1);
-  for(int k=0;k<6;k++)
-    fprintf(stderr, "%d ", h->dunno2[k]);
-  fprintf(stderr, "\n");
+  fprintf(stderr, "%d -- %d %d %d %d\n", h->dunno1, h->dunno1>>24,
+      (h->dunno1>>16)&0xff,
+      (h->dunno1>>8)&0xff,
+      (h->dunno1>>0)&0xff);
+#endif
+#if 1
+  // fprintf(stderr, "header child offset %u eof %u size %d:\n", h->off_chl, h->off_eof, h->off_eof - h->off_chl);
+  int32_t *dat = ((int32_t *)h) + h->off_chl / 4;
+  fprintf(stderr, "child offsets:\n");
+  while((uint8_t*)dat < (uint8_t*)h + h->off_eof)
+  {
+    fprintf(stderr, " %8d\t%8d\t%8d -- %g %g %g\n",
+        dat[0], dat[1], dat[2],
+        dat[0]/(float)0xffff, dat[1]/(float)0xffff, dat[2]/(float)0xffff);
+    dat+=3;
+  }
 #endif
 
 #if 1
@@ -61,9 +73,15 @@ int main(int argc, char *argv[])
   {
     c3m_material_t *m0 = c3m_get_materials(h) + m;
     fprintf(stderr, "%12s", m0->texname);
-    for(int k=0;k<4;k++)
-      fprintf(stderr, " %3u", m0->dunno[k]);
+    uint8_t *b = (uint8_t*)m0->dunno;
+    for(int k=0;k<16;k++)
+      fprintf(stderr, " %3u", b[k]);//m0->dunno[k]);
     fprintf(stderr, "\n");
+    // fprintf(stderr, "\tbytes %d %d %d %d\n",
+    //      m0->dunno[3]>>24,          // =0?
+    //     (m0->dunno[3]>>16)&0xff,    // something complicated about animation
+    //     (m0->dunno[3]>>8)&0xff,     // number of frames/materials after this one
+    //      m0->dunno[3]&0xff);        // =0?
 
     // texname seems to have leading zeroes/blanks
     // sometimes there is no texture.
@@ -82,10 +100,10 @@ int main(int argc, char *argv[])
 
 #if 0
   // fprintf(stderr, "file offsets: %u %u %u %u %u %u\n",
-  //     h->off_mat, h->off_vtx, h->off_tri, h->off_nrm, h->offset4, h->off_eof);
+  //     h->off_mat, h->off_vtx, h->off_tri, h->off_nrm, h->off_chl, h->off_eof);
   // fprintf(stderr, "block lengths: %d %d %d %d %d\n",
   //     h->off_vtx - h->off_mat, h->off_tri - h->off_vtx, h->off_nrm - h->off_tri,
-  //     h->offset4 - h->off_nrm, h->off_eof - h->offset4);
+  //     h->off_chl - h->off_nrm, h->off_eof - h->chl_off);
   fprintf(stderr, "num mats %d num verts %d num tris %d num normals %d\n",
       c3m_num_materials(h),
       c3m_num_vertices(h),

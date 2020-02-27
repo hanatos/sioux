@@ -75,6 +75,7 @@ typedef struct c3_mission_t
   uint32_t snd_fire;
   uint32_t snd_hit;
   uint32_t snd_explode;
+  uint32_t snd_scrape;
 
   // global dynamic obj for dynamic spawning
   uint32_t obj_fire;
@@ -86,6 +87,9 @@ typedef struct c3_mission_t
   uint32_t obj_stinger;
   uint32_t obj_hellfire;
   uint32_t obj_bullet;
+  uint32_t obj_trail;
+  uint32_t obj_dead_coma;
+  uint32_t obj_dead_copt;
 }
 c3_mission_t;
 

@@ -12,6 +12,7 @@ typedef enum sx_hud_element_t
   s_hud_compass,
   s_hud_waypoint,
   s_hud_time,
+  s_hud_center,
 }
 sx_hud_element_t;
 

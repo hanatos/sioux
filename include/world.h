@@ -7,14 +7,40 @@
 
 // wraps current state of the world
 
+// global list of parts of entities, such that
+// we can deal damage and instruct the move routine
+// to adapt the physics sim accordingly.
+typedef enum sx_part_type_t
+{
+  s_part_body,
+  s_part_main_rotor,
+  s_part_tail_rotor,
+  s_part_tail_stab,
+  s_part_weap_right,
+  s_part_weap_left,
+  s_part_gear,
+  s_part_bay,
+}
+sx_part_type_t;
+
+typedef struct sx_obb_t sx_obb_t;
+typedef struct sx_plot_t
+{
+  char id[4];
+  void (*plot)(uint32_t ei);
+  int  (*collide)(const sx_entity_t *e, sx_obb_t *box, sx_part_type_t *pt);
+}
+sx_plot_t;
+
 typedef struct sx_entity_t
 {
   // rigid body can be applied forces (need to transform to local space)
   sx_rigid_body_t body;
   uint32_t objectid;      // references into assets
-  uint32_t dead_objectid; // this is the object if the entity was destroyed
   sx_move_t move;         // movement controller with callbacks
   void *move_data;        // dynamically allocated movement controller data
+
+  sx_plot_t plot;         // wrap plot functions
 
   // previous position and alignment
   quat_t prev_q;
@@ -79,8 +105,7 @@ void sx_world_remove_entity(uint32_t ei);
 // TODO: probably needs /a lot/ of amending
 uint32_t sx_world_add_entity(
     uint32_t objectid,
-    uint32_t dead_objectid,
-    float *pos, quat_t *q,
+    const float *pos, const quat_t *q,
     char id, uint8_t camp);
 
 float sx_world_get_height(const float *p);

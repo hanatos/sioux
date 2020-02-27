@@ -1,5 +1,6 @@
 #pragma once
 #include <pthread.h>
+#include <stdint.h>
 
 #define threads_mutex_t          pthread_mutex_t
 #define threads_mutex_lock(m)    pthread_mutex_lock(m)
@@ -9,7 +10,12 @@
 
 // only fwd declare
 typedef struct threads_t threads_t;
-typedef struct threads_tls_t threads_tls_t;
+typedef struct threads_tls_t
+{
+  uint32_t tid; // thread id from 0..num_threads-1
+}
+threads_tls_t;
+
 
 extern threads_t thr;
 extern _Thread_local threads_tls_t thr_tls;
@@ -32,5 +38,8 @@ void threads_wait();
 // return number of threads
 int threads_num();
 
-// return id of current thread 0..threads_num()-1
-int threads_id();
+static inline uint32_t threads_id()
+{
+  return thr_tls.tid;
+}
+

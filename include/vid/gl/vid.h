@@ -9,11 +9,8 @@
 
 typedef struct sx_material_t
 {
-  char texname[15];   // texture file name, .3do supports 12 chars
-  uint32_t texid[32]; // texture id, possibly up to 32 frames in an animation
-  uint32_t tex_cnt;   // number of texture frames
-  int32_t  texu;      // texture unit
-  uint32_t dunno[4];  // some extra info
+  uint64_t tex_handle;
+  uint32_t dunno[4];   // some extra info, dunno[4] has frame count for textures
 }
 sx_material_t;
 
@@ -27,13 +24,13 @@ typedef struct sx_geo_t
   uint32_t num_idx;
   uint32_t num_mat;
   GLuint program;
-  GLuint mat_tex;
-  sx_material_t mat[128];
+  uint32_t mat_idx;
   char filename[32];
 
   uint32_t instance_offset; // offset into ssbo of instanced matrices
   uint32_t instances;
-  float    instance_mat[32*1024]; // enough for 1024 instances
+  float    instance_mat[48*1024]; // enough for 1024 instances
+  uint32_t instance_anim[1024];
 }
 sx_geo_t;
 
@@ -55,7 +52,7 @@ typedef struct sx_vid_t
 
   uint32_t vao_hud_text, vbo_hud_text[3];
   uint32_t hud_text_chars; // number of characters, 100 max
-  uint32_t hud_text_font;  // texture id
+  uint64_t hud_text_font;  // texture handle (bindless)
   float hud_text_vx[800], hud_text_uv[800];
   uint32_t hud_text_id[600];
 
@@ -78,13 +75,14 @@ typedef struct sx_vid_t
   uint32_t num_geo;
   sx_geo_t geo[2048];
 
-  // TODO: can we get away with one streamed buffer? don't we need to put all matrices in a row first by
-  // TODO: querying the entities? i suppose we need this one here, fill it with all matrices, keep an offset
-  // buffer per geo, and then stream to ssbo/set the offset as uniform
   uint32_t  geo_instance_cnt;
-  uint32_t *geo_instance_id;
-  float    *geo_instance_mat;
   uint32_t  geo_instance_ssbo;
+
+  sx_material_t geo_material[4096];
+  uint32_t geo_material_cnt;
+  uint32_t geo_material_ssbo;
+
+  uint32_t  geo_anim_ssbo;
 
   // terrain textures and "character" detail textures:
   uint32_t tex_terrain[8];   // col, dis, mat, ccol, cdis, cmat, acc, cacc
@@ -95,6 +93,9 @@ typedef struct sx_vid_t
 
   // TODO: 
   uint32_t tex_skypal, tex_clouds;
+
+  uint64_t env_cloud_noise0;
+  uint64_t env_cloud_noise1;
 }
 sx_vid_t;
 

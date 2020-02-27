@@ -7,15 +7,26 @@
 sx_t sx; // linkage
 
 int
-sx_init()
+sx_init(int argc, char *argv[])
 {
+  threads_global_init();
   memset(&sx, 0, sizeof(sx));
-  sx.width = 1280;
+  sx.width  = 1280;
   sx.height = 640;
-  sx.width = 1920;
+  sx.width  = 1920;
   sx.height = 1080;
+  // sx.width  = 3840;
+  // sx.height = 2160;
+  sx.lod = 4;
 
-  sx_vid_init(sx.width, sx.height); // also inits SDL
+  int fullscreen = 0;
+  for(int i=0;i<argc;i++)
+  {
+    if     (!strcmp(argv[i], "--fullscreen")) fullscreen = 1;
+    else if(!strcmp(argv[i], "--lod") && i+1 < argc) sx.lod = atof(argv[++i]);
+  }
+
+  sx_vid_init(sx.width, sx.height, fullscreen); // also inits SDL
 
 	// open audio device
   sx.audio_spec.freq = 11025;
@@ -31,7 +42,6 @@ sx_init()
   }
   Mix_ReserveChannels(1); // for radio
   fprintf(stderr, "[sx] got audio spec %d %d %d\n", sx.audio_spec.channels, sx.audio_spec.freq, sx.audio_spec.samples);
-  threads_global_init();
   sx_world_init();
   return 0;
 }

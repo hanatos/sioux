@@ -200,13 +200,15 @@ float tri2_intersect(
 
 const vec3  k_sun_dir = vec3(-0.624695,0.468521,-0.624695);
 const vec3  k_sun_col = vec3(1.0,0.6,0.3);
-const vec3  k_fog_col = vec3(0.4,0.6,1.15);
+const vec3  k_fog_col = vec3(1, 0, 1);//vec3(0.4,0.6,1.15);
 
+#if 0
 // return transmittance of atmosphere
 float atmosphere(vec3 p, vec3 w, float t)
 {
   // density is d(t) = d0 * exp(-d1*height)
-  const float d0 = .0001f, d1 = 0.001;
+  // const float d0 = .08, d1 = 0.8;
+  const float d0 = 10.0, d1 = 100.0;
   // d0 is density at water level
   // and we want to choose b0,b1 such that height p.y + w.y*t results in right density
   // d0 * exp(-d1*(p.y+w.y*t-k_waterlevel)) = b0 * exp(-b1*t)
@@ -214,6 +216,7 @@ float atmosphere(vec3 p, vec3 w, float t)
   const float b1 = d1*((p.y-u_terrain_bounds.x)/t + w.y);
   return exp(-b0/b1 * (1.0f - exp(-b1*t)));
 }
+#endif
 
 //------------------------------------------------------------------------------------------
 // terrain
@@ -588,7 +591,7 @@ void main()
 
   col  = terrain_sample.rgb;
   float dist = min(geo_depth.z, terrain_sample.w);
-  col += (1.0-atmosphere(u_pos, w, dist))*k_fog_col;
+  // col += (1.0-atmosphere(u_pos, w, dist))*k_fog_col;
 
   //------------------------------------------------
   // final
