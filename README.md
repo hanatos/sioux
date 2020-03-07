@@ -11,6 +11,14 @@ and working).
 ![](doc/img4.jpg)
 ![](doc/img5.jpg)
 ![](doc/img6.jpg)
+![](doc/img7.jpg)
+![](doc/img8.jpg)
+![](doc/img9.jpg)
+![](doc/img10.jpg)
+![](doc/img11.jpg)
+![](doc/img12.jpg)
+![](doc/img13.jpg)
+![](doc/img14.jpg)
 
 back then i loved the game and was blown away by the voxel engine
 and the cohesive mood introduced into the graphics by the use of
