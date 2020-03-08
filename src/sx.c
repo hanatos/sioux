@@ -1,6 +1,5 @@
 #include "sx.h"
 #include "vid.h"
-#include "threads.h"
 
 #include <string.h>
 
@@ -9,7 +8,6 @@ sx_t sx; // linkage
 int
 sx_init(int argc, char *argv[])
 {
-  threads_global_init();
   memset(&sx, 0, sizeof(sx));
   sx.width  = 1280;
   sx.height = 640;
@@ -51,5 +49,4 @@ sx_cleanup()
 {
   Mix_CloseAudio();
   sx_vid_cleanup(); // shuts down SDL
-  threads_global_cleanup();
 }

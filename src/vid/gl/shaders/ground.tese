@@ -12,8 +12,8 @@ uniform mat4 u_mvp;
 uniform mat4 u_mv;
 uniform mat4 u_mvp_old;
 
-out vec3 te_pos_ws;
-out vec4 te_pos_old;
+out vec3 pos_ws;
+out vec4 pos_old;
 
 layout(binding = 1) uniform sampler2D terrain_col;
 layout(binding = 2) uniform sampler2D terrain_dis;
@@ -214,22 +214,21 @@ float get_height(vec3 pos)
   float h3 = textureLod(terrain_dis, uv+off.zw, lod).r;
   float h = 0.25*(h0+h1+h2+h3);
 #endif
+  if(u_lod > 3) return h; // only shading normal, no displacement
   if(dist > 1000/u_lod) return h;
+  float fade = clamp(1.0-(dist - 700.0/u_lod)/(100.0/u_lod), 0.0, 1.0);
 #if 1
   // float mat = 256*texture(terrain_det, uv).r;
   // uvec3 mat = texelFetch(terrain_det, ivec2(1024*uv+.5f), 0).rgb/4;
   // uvec3 mat = textureLod(terrain_det, uv, 0).rgb/4;
-  uvec3 mat = uvec3(textureLod(terrain_det, uv, 0).rgb*256.0/4.0);
+  vec3 matf = textureLod(terrain_det, uv, 0).rgb;
+  uvec3 mat = uvec3(matf*256.0/4.0);
   uint tile = mat.r + 72;//144;
   if(mat.r == 0) tile = mat.b;
 
-  if(mat.g == 0)
-  {
-    float s = -0.005+0.01*sand((pos.xz+u_pos_ws.xz)*0.05);
-    s += -0.001+.001*sand((pos.xz+u_pos_ws.xz)*0.6);
-    return h + s;
-  }
-#if 1
+  float s = -0.005+0.01*sand((pos.xz+u_pos_ws.xz)*0.05);
+  s += -0.001+.001*sand((pos.xz+u_pos_ws.xz)*0.6);
+#if 0
   float dis = texelFetch(
     terrain_cdis, ivec2(mod(16*1024*uv, vec2(16)))+ivec2(0, 16*tile), 0).r;
 #else
@@ -238,7 +237,7 @@ float get_height(vec3 pos)
 #endif
   // if(mat.r != 0) return h;// + (dis-.5)/64.0;
   // if(mat.r == 0) return h + 0.01;
-  return h + (.5-dis)/128;
+  return h + fade * mix(s, (.5-dis)/128, clamp(4*matf.g, 0, 1));
 #endif
 }
 
@@ -256,9 +255,9 @@ void main(void)
 
   p.y = u_terrain_bounds.x - u_pos_ws.y + u_terrain_bounds.y * get_height(vec3(p));
   gl_Position = u_mvp * p;
-  te_pos_ws  = p.xyz;
-  te_pos_old = u_mvp_old * p;
+  pos_ws  = p.xyz;
+  pos_old = u_mvp_old * p;
   vec2 jitter = 1.2*gl_Position.w*vec2(hash1(u_time), hash1(u_time+1337))/u_res.xy;
-  te_pos_old += vec4(jitter, 0, 0);
+  pos_old += vec4(jitter, 0, 0);
   gl_Position += vec4(jitter, 0, 0);
 }

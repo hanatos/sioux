@@ -27,8 +27,7 @@ palettes.
 playing it today i still think it's a great game. but.
 
 * a flight simulator with a camera projection that does not allow to pitch and
-  bank without weird distortions? luckily today's GPUs are insanely powerful and
-  i replaced the terrain rendering by more or less honest ray tracing.
+  bank without weird distortions?
 
 * faking similar colour mood by multiplying a consistent palette is nice.
   today this job is usually done by global illumination.
@@ -54,6 +53,10 @@ well as the external tool ```pup/``` by vladimir stupin.
 $ ./sx
 ```
 
+you can also pass ```--fullscreen``` and play with ```--lod 1``` (1 is highest,
+4 is default, higher will be lower detail). if you want to start another
+mission, try ```./sx c1m3.mis``` or similar.
+
 For ```SDL2_mixer``` to work with fluidsynth you need to set ```SDL_SOUNDFONTS```:
 
 ```
@@ -67,6 +70,12 @@ keyboard bindings are
 ![](doc/keymap.svg)
 
 and you may want to read [the helicopter flying handbook](https://www.faa.gov/regulations_policies/handbooks_manuals/aviation/helicopter_flying_handbook/).
+
+there's also 'p' for pause, 'f' for opening bay door, 'g' for raise/lower gear.
+
+currently the keymap is hardcoded in ```src/vid/gl/vid.c``` and prepared for an english
+dvorak layout.
+
 
 
 # known issues

@@ -70,9 +70,9 @@ sx_plot_coma_collide(
     sx_obb_t          *obb,
     sx_part_type_t    *pt)
 {
-  sx_obb_get(obb+0, ent, 0, 1);
-  sx_obb_get(obb+1, ent, 2, 1);
-  sx_obb_get(obb+2, ent, 3, 2);
+  sx_obb_get(obb+0, ent, 0, -1);
+  sx_obb_get(obb+1, ent, 2, -1);
+  sx_obb_get(obb+2, ent, 3,  2);
   pt[0] = s_part_body;
   pt[1] = s_part_main_rotor;
   pt[2] = s_part_tail_rotor;
@@ -82,55 +82,37 @@ sx_plot_coma_collide(
 void
 sx_plot_coma(uint32_t ei)
 {
+  sx_entity_t *ent = sx.world.entity + ei;
   const uint32_t oi = sx.world.entity[ei].objectid;
   const sx_plot_part_t dead_part[] = {
     { 0, -1, sx.time,     0, {    0, 0, 1, 0}},};
   if(sx.world.entity[ei].hitpoints <= 0)
     return sx_plot_parts(ei, sx.mission.obj_dead_coma, 1, dead_part, 0);
 
-  // FIXME: hard to depend on the move data here, we should not!
-  sx_heli_t *h = sx.world.entity[ei].move_data;
-
-  if(!h) // comanche with different move routine (wingman for now..)
-    return sx_plot_parts(ei, oi, 1, dead_part, 0);
-
-#if 1
-  // XXX put into move routines (plyr, wing)!
-  if(h->ctl.gear_move > 0 && h->ctl.gear < 1.0f)
-    h->ctl.gear += 1.0f/128.0f;
-  if(h->ctl.gear_move < 0 && h->ctl.gear > 0.0f)
-    h->ctl.gear -= 1.0f/128.0f;
-  if(h->ctl.gear == 0.0f) h->ctl.gear_move = 0; // not really needed i guess
-  // fprintf(stderr, "gear %g\n", h->ctl.gear);
-  if(h->ctl.flap_move > 0 && h->ctl.flap < 1.0f)
-    h->ctl.flap += 1.0f/128.0f;
-  if(h->ctl.flap_move < 0 && h->ctl.flap > 0.0f)
-    h->ctl.flap -= 1.0f/128.0f;
-  if(h->ctl.flap == 0.0f) h->ctl.flap_move = 0; // not really needed i guess
-#endif
-
+  float bay  = ent->stat.bay;
+  float gear = ent->stat.gear;
   const sx_plot_part_t part[] = {
     { 0, -1, sx.time,     0, {    0, 0, 1, 0}},        // bod  0
   //{ 1, -1, sx.time,     0, { .001, 0, 1, 0}},        // bl1  1
     { 2, -1, sx.time,     0, { .003, 0, 1, 0}},        // bl2  2
     { 3,  2, sx.time,     0, { .010, 1, 0, 0}},        // rtr  3
     { 4, -1, sx.time,     0, {    0, 0, 1, 0}},        // int
-    { 5,  3, h->ctl.gear, 0, {-1.52,  0.1, 0.1, 0.9}}, // ldr  5
-    { 6,  4, h->ctl.gear, 0, { 1.52, -0.1, 0.1, 0.9}}, // ldl  6
-    { 7,  5, h->ctl.gear, 0, {-1.52, 0, 0, 1}},        // ldk  7
-    { 8,  6, h->ctl.flap, 0, {-1.40, 0, 0.1, 1}},      // mdr  8 bay door
-    { 9,  7, h->ctl.flap, 0, { 1.40, 0, 0.1, 1}},      // mdl  9 bay door
-    {10,  8, h->ctl.gear, 0, {-1.39, .8,-0.3, 0.1}},   // lgr 10
-    {11,  9, h->ctl.gear, 0, { 1.39,-.8,-0.3, 0.1}},   // lgl 11
-    {12, 10, h->ctl.gear, 0, {-1.00, 1, 0, 0}},        // lgk 12
+    { 5,  3, gear,        0, {-1.52,  0.1, 0.1, 0.9}}, // ldr  5
+    { 6,  4, gear,        0, { 1.52, -0.1, 0.1, 0.9}}, // ldl  6
+    { 7,  5, gear,        0, {-1.52, 0, 0, 1}},        // ldk  7
+    { 8,  6, bay,         0, {-1.40, 0, 0.1, 1}},      // mdr  8 bay door
+    { 9,  7, bay,         0, { 1.40, 0, 0.1, 1}},      // mdl  9 bay door
+    {10,  8, gear,        0, {-1.39, .8,-0.3, 0.1}},   // lgr 10
+    {11,  9, gear,        0, { 1.39,-.8,-0.3, 0.1}},   // lgl 11
+    {12, 10, gear,        0, {-1.00, 1, 0, 0}},        // lgk 12
     {13, 12, sx.time,     0, {    0, 0, 1, 0}},        // gun
     {14, 14, sx.time,     0, {    0, 0, 1, 0}},        // hed copilot head
-    {15,  6, h->ctl.flap, 0, {-1.40, 0, 0.1, 1}},      // wpr 15 bay weapons
-    {16,  7, h->ctl.flap, 0, { 1.40, 0, 0.1, 1}},      // wpl 16 bay weapons
+    {15,  6, bay,         0, {-1.40, 0, 0.1, 1}},      // wpr 15 bay weapons
+    {16,  7, bay,         0, { 1.40, 0, 0.1, 1}},      // wpl 16 bay weapons
     {17, 12, sx.time,     0, {    0, 0, 1, 0}},        // gn2
   //{18, -1, sx.time,     0, {    0, 0, 1, 0}},        // fam 18 extra weapons
     {19, -1, sx.time,     0, {    0, 0, 1, 0}},        // in2
-    {20, 11, h->ctl.gear, 0, { 1.52, 0, 0, 1}},        // ldj 20
+    {20, 11, gear,        0, { 1.52, 0, 0, 1}},        // ldj 20
     {21, 17, sx.time,     0, { 2e-3, 0, 1, 0}},        // nos 21
     {22, 12, sx.time,     0, {    0, 0, 1, 0}},        // box gun attachment point
     {14, 13, sx.time,     0, {    0, 0, 1, 0}},        // hed pilot head
@@ -140,5 +122,5 @@ sx_plot_coma(uint32_t ei)
   if((sx.cam.mode == s_cam_inside_cockpit) ||
       (sx.cam.mode == s_cam_left) ||
       (sx.cam.mode == s_cam_right)) num--;
-  sx_plot_parts(ei, oi, num, part, h->cmm);
+  sx_plot_parts(ei, oi, num, part, ent->cmm);
 }

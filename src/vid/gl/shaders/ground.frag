@@ -194,17 +194,69 @@ float get_height(vec3 pos)
 {
   const float k_terrain_scale = 1.0/(3.0*0.3048*2048.0);
   vec2 uv = -k_terrain_scale * (u_pos_ws.xz + pos.xz);
+  float dist = length(pos);
+  int lod = 0;
+  // lod = clamp(int(dist / 100), 0, 5);
+#if 0
+  float h = textureLod(terrain_dis, uv, lod).r;
+#else
+  vec4 off = vec4(
+      vec2(0.5)/textureSize(terrain_dis, lod).xy,
+     -vec2(0.5)/textureSize(terrain_dis, lod).xy);
+  float h0 = textureLod(terrain_dis, uv+off.xy, lod).r;
+  float h1 = textureLod(terrain_dis, uv+off.xw, lod).r;
+  float h2 = textureLod(terrain_dis, uv+off.zy, lod).r;
+  float h3 = textureLod(terrain_dis, uv+off.zw, lod).r;
+  float h = 0.25*(h0+h1+h2+h3);
+#endif
+  if(dist > 1000/u_lod) return h;
+  float fade = clamp(1.0-(dist - 700.0/u_lod)/(100.0/u_lod), 0.0, 1.0);
+#if 1
+  // float mat = 256*texture(terrain_det, uv).r;
+  // uvec3 mat = texelFetch(terrain_det, ivec2(1024*uv+.5f), 0).rgb/4;
+  // uvec3 mat = textureLod(terrain_det, uv, 0).rgb/4;
+  vec3 matf = textureLod(terrain_det, uv, 0).rgb;
+  uvec3 mat = uvec3(matf*256.0/4.0);
+  uint tile = mat.r + 72;//144;
+  if(mat.r == 0) tile = mat.b;
+
+  float s = -0.005+0.01*sand((pos.xz+u_pos_ws.xz)*0.05);
+  s += -0.001+.001*sand((pos.xz+u_pos_ws.xz)*0.6);
+#if 0
+  float dis = texelFetch(
+    terrain_cdis, ivec2(mod(16*1024*uv, vec2(16)))+ivec2(0, 16*tile), 0).r;
+#else
+  float dis = textureLod(
+      terrain_cdis, (ivec2(mod(16*1024*uv, vec2(16)))+ivec2(0, 16*tile))/vec2(16.0, 4096.0), 0).r;
+#endif
+  // if(mat.r != 0) return h;// + (dis-.5)/64.0;
+  // if(mat.r == 0) return h + 0.01;
+  h += fade * mix(s, (.5-dis)/128, clamp(4*matf.g, 0, 1));
+  return u_terrain_bounds.x + u_terrain_bounds.y * h;
+#endif
+}
+
+#if 0
+float get_height(vec3 pos)
+{
+  const float k_terrain_scale = 1.0/(3.0*0.3048*2048.0);
+  vec2 uv = -k_terrain_scale * (u_pos_ws.xz + pos.xz);
   float h = textureLod(terrain_dis, uv, 0).r;
   return u_terrain_bounds.x + u_terrain_bounds.y * h;
 }
+#endif
 
 vec3 get_normal(vec3 pos)
 {
-  vec2 off = vec2(4, 0);
+#if 0 // faster but artifacts (11.7ms vs 12.9ms)
+  return normalize( cross(dFdx(pos),dFdy(pos)) );
+#else
+  vec2 off = vec2(0.01, 0);
   float h0 = get_height(pos);
   float h1 = get_height(pos + off.xyy);
   float h2 = get_height(pos + off.yyx);
   return -normalize(cross(vec3(off.x, h1-h0, 0), vec3(0, h2-h0, off.x)));
+#endif
 }
 
 vec4 get_colour(vec3 pos)
@@ -270,13 +322,20 @@ void main()
 {
   // frag_color = vec4(0.1f, 1.0f, 1.0f, 1.0f);
 
+
   // XXX TODO: get normal from precomputed normal of texture map in 3 channels
   const vec3 k_sun_dir = vec3(-0.624695,0.468521,-0.624695);
   // we just compute the tesselated tri normal to show some
   // "voxel artifacts". really these are to high frequency to be useful as normal.
   const float amb = 0.1;
+#if 0 // use geometry shader normal
   float diff = amb + (1.0-amb)*max(0, dot(k_sun_dir, normalize(-normal)));
+#else // super expensive normals, could strip away geo shader
+  vec3 n = get_normal(pos_ws);
+  float diff = amb + (1.0-amb)*max(0, dot(k_sun_dir, normalize(n)));
+#endif
   frag_color.rgb = diff*get_colour(pos_ws).rgb;
+
 #if 0
   // TODO: detect grass, rock, water!
   // TODO: try to put in displacement instead (normals?)

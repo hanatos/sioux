@@ -123,40 +123,27 @@ static inline void sx_rigid_body_eval(
 
 // integrate position and orientation from accumulated momentums
 static inline void sx_rigid_body_move(
-    sx_rigid_body_t *b,
+    sx_rigid_body_t *body, // update this one
+    sx_rigid_body_t *b,    // derivatives are here
     const float dt)
 {
-  assert(0); // did not fix this wrt world space computation of force and torque!
-  // euler:
-  for(int k=0;k<3;k++) b->pw[k] += b->torque[k] * dt; // integrate angular momentum
-  float forcew[3] = {b->force[0], b->force[1], b->force[2]}; // force in world space
-  quat_transform(&b->q, forcew);
-  for(int k=0;k<3;k++) b->pv[k] += forcew[k] * dt; // accumulate momentum
-  // for(int k=0;k<3;k++) b->pv[k] += b->force [k] * dt; // accumulate momentum
-
-  for(int k=0;k<3;k++) b->v[k] = b->pv[k] / b->m; // integrate velocity in world space
-  mat3_mulv(b->invI, b->pw, b->w); // compute angular velocity in object space
+  // clear forces
+  for(int k=0;k<3;k++) body->force[k] = body->torque[k] = 0.0f;
 
   // integrate angular velocity -> orientation
-#if 0
-  // the following holds if w is in world space:
-  // q += dt * 0.5 * w * q;
-  float ww[3] = {b->w[0], b->w[1], b->w[2]};
-  quat_transform(&b->q, ww); // convert w to world space
-  quat_t wq;
-  quat_init(&wq, 0.0f, ww[0], ww[1], ww[2]);
-  quat_mul(&wq, &b->q, &b->spin);
-#else
-  // spin = qd * dt = 0.5 * q * w
-  quat_t wq;
-  quat_init(&wq, 0.0f, b->w[0], b->w[1], b->w[2]);
-  quat_mul(&b->q, &wq, &b->spin);
-#endif
-  quat_muls(&b->spin, 0.5f*dt);
-  quat_add(&b->q, &b->spin);
-  quat_normalise(&b->q);
+  quat_muls(&b->spin, dt);
+  quat_add(&body->q, &b->spin);
 
-  for(int k=0;k<3;k++) b->c[k] += dt * b->v[k]; // integrate position in world space
+  // integrate position in world space
+  for(int k=0;k<3;k++) body->c[k] += dt * b->v[k];
+
+  // integrate angular momentum in world space
+  for(int k=0;k<3;k++) body->pw[k] += dt * b->torque[k];
+  // integrate linear momentum in world space
+  for(int k=0;k<3;k++) body->pv[k] += dt * b->force[k];
+
+  // recompute dependent quantities:
+  sx_rigid_body_recalculate(body);
 }
 
 static inline void sx_rigid_body_move_rk4(

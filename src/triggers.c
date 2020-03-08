@@ -56,9 +56,9 @@ c3_triggers_int_to_pos(uint32_t id, float *pos)
     if(wp < 20 && wpn <= 10)
     {
       //fprintf(stderr, "computing distance to waypoint %c%c\n", id&0xff, id>>8);
-      pos[0] = sx.mission.waypoint[wp][wpn][0];
+      pos[0] = sx.world.group[wp].waypoint[wpn][0];
       pos[1] = 0.0f;
-      pos[2] = sx.mission.waypoint[wp][wpn][1];
+      pos[2] = sx.world.group[wp].waypoint[wpn][1];
     }
   }
 }
@@ -200,6 +200,7 @@ c3_triggers_check_cond(
     uint32_t arg0,
     uint32_t arg1)
 {
+  sx_entity_t *P = sx.world.entity+sx.world.player_entity;
   // TODO: big switch over all cases
   switch(c)
   {
@@ -208,7 +209,7 @@ c3_triggers_check_cond(
         float pos[3];
         c3_triggers_int_to_pos(arg1, pos);
         for(int k=0;k<3;k++)
-          pos[k] -= sx.world.entity[sx.world.player_entity].body.c[k];
+          pos[k] -= P->body.c[k];
         // triggers_printf(stderr, "distance to waypoint %c%c : %g\n", arg1&0xff, arg1>>8, sqrtf(dot(pos,pos)/2.0f));
         return sqrtf(dot(pos,pos)) < ft2m(2*arg0); // or maybe it was in yards?
       }
@@ -217,35 +218,35 @@ c3_triggers_check_cond(
         float pos[3];
         c3_triggers_int_to_pos(arg1, pos);
         for(int k=0;k<3;k++)
-          pos[k] -= sx.world.entity[sx.world.player_entity].body.c[k];
+          pos[k] -= P->body.c[k];
         // triggers_printf(stderr, "distance to waypoint %c%c : %g\n", arg1&0xff, arg1>>8, sqrtf(dot(pos,pos)/2.0f));
         return sqrtf(dot(pos,pos)) > ft2m(2*arg0);
       }
     case C3_COND_ALIVE:      // alive, <object>
-      if(arg0 == 'P') return sx.world.entity[sx.world.player_entity].hitpoints > 0.0;
+      if(arg0 == 'P') return P->hitpoints > 0.0;
       return 0;
     case C3_COND_KILLED:     // killed, <object>, <num>
       return 0;
     case C3_COND_DESTROYED:
-      if(arg0 == 'P') return sx.world.entity[sx.world.player_entity].hitpoints <= 0.0;
+      if(arg0 == 'P') return P->hitpoints <= 0.0;
       // TODO: check other ids
       return 0;
     case C3_COND_BELOW:      // below, <altitude>
       // triggers_printf(stderr, "checking below %g %u\n",
       //    m2ft(sx_heli_alt_above_ground(sx.world.player_move)), arg0);
-      return m2ft(sx_heli_alt_above_ground(sx.world.player_move)) < arg0;
+      return m2ft(P->stat.alt_above_ground) < arg0;
     case C3_COND_ABOVE:      // above, <altitude>
       // triggers_printf(stderr, "checking above %g %d\n",
       // m2ft(sx_heli_alt_above_ground(sx.world.player_move)), arg0);
-      return m2ft(sx_heli_alt_above_ground(sx.world.player_move)) > arg0;
+      return m2ft(P->stat.alt_above_ground) > arg0;
     case C3_COND_COUNTER:    // counter, <value>
       return mis->counter >= arg0;
     case C3_COND_TIME:       // time, <value>
       return mis->time >= arg0;
     case C3_COND_WAYPOINT:   // waypoint, <object>, <waypoint id>
       if(arg0 == 'P') return ((arg1&0xff)=='A') &&
-        ((arg1>>8)=='1' + sx.world.player_wp-1) &&
-         (sx.world.player_old_wp != sx.world.player_wp);
+        ((arg1>>8)=='1' + P->curr_wp-1) &&
+         (P->prev_wp != P->curr_wp);
       return 0;
     case C3_COND_DAMAGE:     // damage, <num>
       // TODO: return if hitpoints >= num
@@ -253,7 +254,7 @@ c3_triggers_check_cond(
     case C3_COND_FACES:      // faces, <object/waypoint id>  // maybe looking at it?
       return 0;
     case C3_COND_WEAPON:
-      return sx.world.player_weapon == arg0;
+      return P->weapon == arg0;
     default:
       return 0;
   }

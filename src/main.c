@@ -51,9 +51,14 @@ int main(int argc, char *argv[])
     while(sim_time < end)
     {
       if(sx_vid_handle_input()) goto out;
+      // TODO: read network input and write movement controllers + rigid bodies
+      // sx_net_recv();
       sx_world_think(delta_sim_time);
       sx_world_move(delta_sim_time);
       sim_time += delta_sim_time;
+      // sx_net_send();
+      // TODO: send out our movement controllers and rigid body locations with
+      // current timestamp
     }
     // another second passed, run game mechanics only then
     frames++;

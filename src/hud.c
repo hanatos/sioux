@@ -40,8 +40,9 @@ circle(float cx, float cy, float r, float *lines, int n, int dash)
   return i;
 }
 
-void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
+void sx_hud_init(sx_hud_t *hud)
 {
+  sx_entity_t *entity = sx.world.entity + sx.world.player_entity;
   // enough flashing? reset:
   if(hud->flash_num <= sx.time)
   {
@@ -55,12 +56,12 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
   hud->col[1] = 1.0f;
   hud->col[2] = 0.7f;
   char timestr[256];
-  const float *vws = heli->entity->body.v;
+  const float *vws = entity->body.v;
   float vos[3] = { // speed in object space
-    heli->entity->body.v[0],
-    heli->entity->body.v[1],
-    heli->entity->body.v[2]};
-  quat_transform_inv(&heli->entity->body.q, vos);
+    entity->body.v[0],
+    entity->body.v[1],
+    entity->body.v[2]};
+  quat_transform_inv(&entity->body.q, vos);
   sx_vid_hud_text_clear();
   int i = 0;
   int textpos = 0;
@@ -80,13 +81,57 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
   textpos = sx_vid_hud_text(timestr, textpos, 0.77f, -0.98f, 0, 0);
   HUD_END(s_hud_time)
 
+  HUD_BEG(s_hud_radar)
+  // find quaternion that only encodes yaw
+  float front[3] = {0, 0, 1}, *c = entity->body.c;
+  quat_transform(&entity->body.q, front); // to world space
+  float angle = atan2f(front[0], front[2]);
+  quat_t q1;
+  quat_init_angle(&q1, angle, 0, 1, 0);
+  float cx = 0.8, cy = -0.7;
+  i += circle(cx, cy, 0.2f, hud->lines+2*i, 50, 0);
+  char str[2] = {0};
+  for(int g=0;g<25;g++) // ignore 'Z'
+  {
+    for(int m=0;m<sx.world.group[g].num_members;m++)
+    {
+      float x[3] = {sx.world.group[g].member[m]->body.c[0] - c[0], 0.0,
+                    sx.world.group[g].member[m]->body.c[2] - c[2]};
+      float sc = 0.0003;
+      quat_transform_inv(&q1, x);
+      x[0] *= sx.height/(float)sx.width * sc;
+      x[2] *= sc;
+      if(dot(x, x) > 0.2f*0.2f) continue; // out of range
+      str[0] = g + 'A';
+      if(sx.world.group[g].member[m]->hitpoints <= 0.0f) str[0] = 'X';
+      textpos = sx_vid_hud_text(str, textpos, cx-x[0], cy+x[2], 1, 1);
+    }
+  }
+  if(entity->engaged != -1u)
+  {
+    float MVP[16], MV[16], wph[4] = {0, 0, 0, 1}, wp[4];
+    quat_t nop;
+    quat_init(&nop, 0, 1, 0, 0);
+    sx_vid_compute_mvp(MVP, MV, -1, &nop,
+        sx.world.entity[entity->engaged].body.c, &sx.cam, 0, 0);
+    mat4_mulv(MVP, wph, wp);
+    if(wp[2] > 0)
+    {
+      for(int k=0;k<3;k++) wp[k] /= wp[3];
+      float x = wp[0];
+      float y = wp[1];
+      i += circle(x, y, 0.05f, hud->lines+2*i, 7, 0);
+    }
+  }
+  HUD_END(s_hud_radar)
+
   HUD_BEG(s_hud_torque) // collective torque
   float cx = -.430f, cy = -.515f, w = 0.013f;
   i += line(cx, cy, cx, cy+0.36f, hud->lines+2*i); // max at 120%
   for(int k=0;k<13;k++)
   {
     float x = cx + w*(k/13.0f - .5f);
-    i += line(x, cy, x, cy+0.3f*heli->ctl.collective, hud->lines+2*i);
+    i += line(x, cy, x, cy+0.3f*entity->ctl.collective, hud->lines+2*i);
   }
   i += line(cx-w, cy+0.3f, cx+w, cy+0.3f, hud->lines+2*i); // 100% indicator
   // in ground floating indicator
@@ -98,7 +143,7 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
   i += line(cx+bw, cy-bh, cx+bw, cy+bh, hud->lines+2*i);
   i += line(cx+bw, cy+bh, cx-bw, cy+bh, hud->lines+2*i);
   i += line(cx-bw, cy+bh, cx-bw, cy-bh, hud->lines+2*i);
-  snprintf(timestr, sizeof(timestr), "%03d", (int)(100*heli->ctl.collective));
+  snprintf(timestr, sizeof(timestr), "%03d", (int)(100*entity->ctl.collective));
   textpos = sx_vid_hud_text(timestr, textpos, cx, cy, 1, 1);
   HUD_END(s_hud_torque)
 
@@ -111,11 +156,19 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
   float speed = ms2knots(sqrtf(vws[0]*vws[0]+vws[2]*vws[2])); // in knots
   snprintf(timestr, sizeof(timestr), "SPEED %3.0f", speed);
   textpos = sx_vid_hud_text(timestr, textpos, 0.77f, 0.10f, 0, 0);
+  if(entity->ctl.autopilot_vel)
+  { // draw indicator
+    const float dx = 0.015f, dy = sx.width*dx/sx.height;
+    i += line(cx+dx, cy, cx+2*dx, cy, hud->lines+2*i);
+    i += line(cx-dx, cy, cx-2*dx, cy, hud->lines+2*i);
+    i += line(cx, cy+dy, cx, cy+2*dy, hud->lines+2*i);
+    i += line(cx, cy-dy, cx, cy-2*dy, hud->lines+2*i);
+  }
   HUD_END(s_hud_groundvel)
 
   // altitude above ground
   HUD_BEG(s_hud_altitude)
-  const float aog = sx_heli_alt_above_ground(heli);
+  const float aog = entity->stat.alt_above_ground;
   const float cx = -.54f, cy = -.3f;
   i += line(cx, cy, cx, cy+0.6f, hud->lines+2*i);
 
@@ -133,11 +186,19 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
   i += line(cx+0.01f, cy+ht, cx-0.02f, cy+ht-0.01f, hud->lines+2*i);
   snprintf(timestr, sizeof(timestr), "ALT %3d", (int)(aog));
   textpos = sx_vid_hud_text(timestr, textpos, cx, cy+0.63f, 1, 0);
+  if(entity->ctl.autopilot_alt)
+  { // draw indicator
+    float tgt = 0.001f*entity->ctl.autopilot_alt_target;
+    const float d = 0.01f;
+    i += line(cx-d, cy+tgt, cx-3*d, cy+tgt+d, hud->lines+2*i);
+    i += line(cx-d, cy+tgt, cx-3*d, cy+tgt-d, hud->lines+2*i);
+    i += line(cx-3*d, cy+tgt+d, cx-3*d, cy+tgt-d, hud->lines+2*i);
+  }
   HUD_END(s_hud_altitude)
 
   HUD_BEG(s_hud_compass)
   float head[3] = {0.0f, 0.0f, 1.0f}; // world space heading
-  // quat_transform(&heli->entity->body.q, head);
+  // quat_transform(&entity->body.q, head);
   quat_transform(&sx.cam.q, head);
   const float heading = atan2f(-head[0], head[2]);
   // text is in NDC
@@ -167,13 +228,15 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
   HUD_END(s_hud_compass)
 
   HUD_BEG(s_hud_waypoint)
+  const int num_wp = sx.world.group[0].num_waypoints;
   for(int p=0;p<2;p++)
   {
-    uint32_t curr_wp = sx.world.player_wp + p;
+    uint32_t curr_wp = entity->curr_wp + p;
+    if(curr_wp >= num_wp) break;
     float wp[4] = { // waypoint in worldspace
-      sx.mission.waypoint[0][curr_wp][0],
+      sx.world.group[0].waypoint[curr_wp][0],
       0.0f,
-      sx.mission.waypoint[0][curr_wp][1],
+      sx.world.group[0].waypoint[curr_wp][1],
       1.0f,
     };
     wp[1] = sx_world_get_height(wp);
@@ -217,11 +280,10 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
   // where does the nose of the helicopter point to wrt artificial horizon?
   // coordinates are NDC [-1,1]^2
   { // first draw artificial horizon lines by drawing worldspace directions
-    sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
     float MVP[16], MV[16], x0[4], x1[4];
     // find quaternion that only encodes yaw
     float front[3] = {0, 0, 1};
-    quat_transform(&ent->body.q, front); // to world space
+    quat_transform(&entity->body.q, front); // to world space
     float angle = atan2f(front[0], front[2]);
     quat_t q1;
     quat_init_angle(&q1, angle, 0, 1, 0);
@@ -246,8 +308,7 @@ void sx_hud_init(sx_hud_t *hud, const sx_heli_t *heli)
   }
   { // then draw center where helicopter nose is pointing to
     float MVP[16], MV[16], ph[4] = {0, 0, 10, 1}, p[4];
-    sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
-    sx_vid_compute_mvp(MVP, MV, -1, &ent->body.q, sx.cam.x, &sx.cam, 0, 0);
+    sx_vid_compute_mvp(MVP, MV, -1, &entity->body.q, sx.cam.x, &sx.cam, 0, 0);
     mat4_mulv(MVP, ph, p);
     const float cursor[] = {
       -0.1f, 0.f, -0.04f, 0.f, -0.04f, 0.f, -0.04f, -0.04f,

@@ -5,10 +5,10 @@
 #include "file.h"
 #include "pngio.h"
 #include "bc3io.h"
-#include "physics/heli.h"
 #include "terrain.h"
 #include "matrix4.h"
 #include "gameplay.h"
+#include "physics/obb_obb.h"
 
 uint64_t sx_vid_init_image(const char *filename, int smooth);
 
@@ -101,28 +101,15 @@ compile_shader(
 static inline void
 recompile()
 {
-#define CC(prog, vert, frag)\
-  do {\
-  char *vert_shader = file_load("src/vid/gl/shaders/"vert".vert", 0);\
-  char *frag_shader = file_load("src/vid/gl/shaders/"frag".frag", 0);\
-  assert(vert_shader);\
-  assert(frag_shader);\
-  sx.vid.program_##prog = compile_shader(\
-      vert_shader, frag_shader, 0, 0, 0);\
-  free(vert_shader);\
-  free(frag_shader); } while(0)
 #define CCC(prog, vert, frag, tcs, tes, geo)\
   do {\
   char *vert_shader = file_load("src/vid/gl/shaders/"vert".vert", 0);\
   char *frag_shader = file_load("src/vid/gl/shaders/"frag".frag", 0);\
-  char *ttcs_shader = file_load("src/vid/gl/shaders/"tcs".tesc", 0);\
-  char *ttes_shader = file_load("src/vid/gl/shaders/"tes".tese", 0);\
-  char *geom_shader = file_load("src/vid/gl/shaders/"geo".geom", 0);\
+  char *ttcs_shader = tcs[0] ? file_load("src/vid/gl/shaders/"tcs".tesc", 0) : 0;\
+  char *ttes_shader = tes[0] ? file_load("src/vid/gl/shaders/"tes".tese", 0) : 0;\
+  char *geom_shader = geo[0] ? file_load("src/vid/gl/shaders/"geo".geom", 0) : 0;\
   assert(vert_shader);\
   assert(frag_shader);\
-  assert(ttcs_shader);\
-  assert(ttes_shader);\
-  assert(geom_shader);\
   sx.vid.program_##prog = compile_shader(\
       vert_shader, frag_shader, ttcs_shader, ttes_shader, geom_shader);\
   free(geom_shader);\
@@ -131,19 +118,18 @@ recompile()
   free(vert_shader);\
   free(frag_shader); } while(0)
 
-  CC(draw_texture, "fstri", "terrain");
-  CC(draw_env, "fstri", "env");
-  CC(draw_hud, "hud", "hud");
-  CC(hud_text, "hud_text", "hud_text");
-  CC(taa, "fstri", "taa");
-  CC(blit_texture, "fstri", "blit");
-  CC(grade, "fstri", "hud_horizon");
-  CC(hero, "hero", "hero");
-  CC(debug_line, "line", "line");
-  CC(debug_flow, "flow", "line");
-  CCC(terrain, "ground", "ground", "ground", "ground", "ground");
-  // CC(compute_flow, "fstri", "flowcomp");
-#undef CC
+  CCC(draw_texture, "fstri", "terrain", "", "", "");
+  CCC(draw_env, "fstri", "env", "", "", "");
+  CCC(draw_hud, "hud", "hud", "", "", "");
+  CCC(hud_text, "hud_text", "hud_text", "", "", "");
+  CCC(taa, "fstri", "taa", "", "", "");
+  CCC(blit_texture, "fstri", "blit", "", "", "");
+  CCC(grade, "fstri", "hud_horizon", "", "", "");
+  CCC(hero, "hero", "hero", "", "", "");
+  CCC(debug_line, "line", "line", "", "", "");
+  CCC(debug_flow, "flow", "line", "", "", "");
+  CCC(terrain, "ground", "ground", "ground", "ground", "");
+  // CCC(compute_flow, "fstri", "flowcomp", "", "", "");
 #undef CCC
   char *comp = file_load("src/vid/gl/shaders/flow.comp", 0);
   sx.vid.program_compute_flow = compile_compute_shader(comp);
@@ -630,8 +616,8 @@ int sx_vid_init_terrain(
     }
     else
     {
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);//NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);//NEAREST);
     }
 
     if(k != 1 && k != 4)
@@ -1083,6 +1069,85 @@ void sx_vid_render_frame_rect()
         sx_vid_render_instanced_geo(g);
 
 #if 0
+    // draw debug collision boxes
+    sx.vid.debug_line_cnt = 0;
+    for(int e=0;e<sx.world.num_entities;e++)
+    {
+      sx_entity_t *ent = sx.world.entity + e;
+      if(e == 0) ent = sx.world.entity + sx.world.player_entity;
+      if(ent->objectid != -1u && ent->camp == 1)// && sx.assets.object[ent->objectid].collidable)
+      {
+        sx_part_type_t pt[10];
+        sx_obb_t obb[10];
+        int cnt = 0;
+        if(ent->plot.collide)
+          cnt = ent->plot.collide(ent, obb, pt);
+        else
+        {
+          cnt = 1;
+          sx_obb_get(obb, ent, 0, -1); // get first element, without offset since we don't know any better
+        }
+        for(int i=0;i<cnt;i++)
+        {
+        // now draw 12 lines
+        float v0[3], v1[3];
+#define LINE(SA, SB)\
+        for(int k=0;k<3;k++) v0[k]          = obb[i].pos[k] -  obb[i].x[k] * obb[i].hsize[0];\
+        for(int k=0;k<3;k++) v0[k]         +=               SA*obb[i].y[k] * obb[i].hsize[1];\
+        for(int k=0;k<3;k++) v1[k] = v0[k] +=               SB*obb[i].z[k] * obb[i].hsize[2];\
+        for(int k=0;k<3;k++) v1[k] += 2.0f * obb[i].x[k] * obb[i].hsize[0];\
+        sx_vid_add_debug_line(v0, v1);
+        LINE(-1,-1)
+        LINE(-1,+1)
+        LINE(+1,-1)
+        LINE(+1,+1)
+#undef LINE
+#define LINE(SA, SB)\
+        for(int k=0;k<3;k++) v0[k]          = obb[i].pos[k]+SA*obb[i].x[k] * obb[i].hsize[0];\
+        for(int k=0;k<3;k++) v0[k]         +=               -  obb[i].y[k] * obb[i].hsize[1];\
+        for(int k=0;k<3;k++) v1[k] = v0[k] +=               SB*obb[i].z[k] * obb[i].hsize[2];\
+        for(int k=0;k<3;k++) v1[k] += 2.0f * obb[i].y[k] * obb[i].hsize[1];\
+        sx_vid_add_debug_line(v0, v1);
+        LINE(-1,-1)
+        LINE(-1,+1)
+        LINE(+1,-1)
+        LINE(+1,+1)
+#undef LINE
+#define LINE(SA, SB)\
+        for(int k=0;k<3;k++) v0[k]          = obb[i].pos[k]+SA*obb[i].x[k] * obb[i].hsize[0];\
+        for(int k=0;k<3;k++) v0[k]         +=               SB*obb[i].y[k] * obb[i].hsize[1];\
+        for(int k=0;k<3;k++) v1[k] = v0[k] +=               -  obb[i].z[k] * obb[i].hsize[2];\
+        for(int k=0;k<3;k++) v1[k] += 2.0f * obb[i].z[k] * obb[i].hsize[2];\
+        sx_vid_add_debug_line(v0, v1);
+        LINE(-1,-1)
+        LINE(-1,+1)
+        LINE(+1,-1)
+        LINE(+1,+1)
+#undef LINE
+        }
+      }
+    }
+    
+    if(sx.vid.program_debug_line != -1 && sx.vid.debug_line_cnt)
+    {
+      uint32_t program = sx.vid.program_debug_line;
+      glUseProgram(program);
+
+      // we have lines directly in world space
+      float MVP[16], MV[16], pos[3] = {0,0,0};
+      quat_t mq;
+      quat_init_angle(&mq, 0, 1, 0, 0);
+      sx_vid_compute_mvp(MVP, MV, -1, &mq, pos, &sx.cam, 0, 0);
+      glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
+      glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
+
+      glLineWidth(1.5f*sx.width/1024.0f);
+      glNamedBufferSubData(sx.vid.vbo_debug_line, 0, sizeof(sx.vid.debug_line_vx), sx.vid.debug_line_vx);
+      glBindVertexArray(sx.vid.vao_debug_line);
+      glDrawArrays(GL_LINES, 0, sx.vid.debug_line_cnt/6);
+    }
+#endif
+#if 0
     // draw debug force lines
     if(sx.vid.program_debug_line != -1 && sx.vid.debug_line_cnt)
     {
@@ -1222,7 +1287,7 @@ void sx_vid_render_frame_rect()
   // draw hud lines
   if(sx.vid.program_draw_hud != -1)
   {
-    sx_hud_init(&sx.vid.hud, sx.world.player_move);
+    sx_hud_init(&sx.vid.hud);
     glLineWidth(1.5f*sx.width/1024.0f);
     glUseProgram(sx.vid.program_draw_hud);
     glUniform3fv(glGetUniformLocation(sx.vid.program_draw_hud, "u_col"), 1, sx.vid.hud.col);
@@ -1520,7 +1585,7 @@ void sx_vid_render_frame()
   // draw hud lines
   if(sx.vid.program_draw_hud != -1)
   {
-    sx_hud_init(&sx.vid.hud, sx.world.player_move);
+    sx_hud_init(&sx.vid.hud);
     glLineWidth(1.5f*sx.width/1024.0f);
     glUseProgram(sx.vid.program_draw_hud);
     glUniform3fv(glGetUniformLocation(sx.vid.program_draw_hud, "u_col"), 1, sx.vid.hud.col);
@@ -1561,9 +1626,81 @@ void sx_vid_render_frame()
   SDL_GL_SwapWindow(sx.vid.window);
 }
 
+static inline void sx_heli_control_cyclic_x(sx_move_controller_t *ctl, float v)
+{
+  ctl->cyclic[0] = CLAMP(v, -1.0f, 1.0f);
+}
+
+static inline void sx_heli_control_cyclic_z(sx_move_controller_t *ctl, float v)
+{
+  ctl->cyclic[1] = CLAMP(v, -1.0f, 1.0f);
+}
+
+static inline void sx_heli_control_collective(sx_move_controller_t *ctl, float v)
+{
+  ctl->collective = 0.2 + CLAMP(v, -0.2f, 1.0f);
+}
+
+static inline void sx_heli_control_increase_collective(sx_move_controller_t *ctl, float v)
+{
+  ctl->collective = CLAMP(ctl->collective + v, 0.0f, 1.2f);
+}
+
+static inline void sx_heli_control_tail(sx_move_controller_t *ctl, float v)
+{
+  ctl->tail = CLAMP(v, -1.0f, 1.0f);
+}
+
+static inline void sx_heli_control_gear(sx_move_controller_t *ctl)
+{
+  if     (ctl->trigger_gear >= 0) ctl->trigger_gear = -1;
+  else if(ctl->trigger_gear <= 0) ctl->trigger_gear =  1;
+}
+
+static inline void sx_heli_control_flap(sx_move_controller_t *ctl)
+{
+  if     (ctl->trigger_bay >= 0) ctl->trigger_bay = -1;
+  else if(ctl->trigger_bay <= 0) ctl->trigger_bay =  1;
+}
+
+
+static inline void sx_heli_control_engage_target()
+{
+  sx_entity_t *P = sx.world.entity + sx.world.player_entity;
+  if(P->engaged != -1u)
+  { // if out of range, de-select
+    float x[3] = {
+      sx.world.entity[P->engaged].body.c[0] - P->body.c[0], 0.0,
+      sx.world.entity[P->engaged].body.c[2] - P->body.c[2]};
+    if(dot(x,x) > 800*800) P->engaged = -1u;
+  }
+  int next = 0;
+  for(int g=0;g<25;g++) // ignore 'Z'
+  {
+    for(int m=0;m<sx.world.group[g].num_members;m++)
+    {
+      if(sx.world.group[g].member[m]->camp == 0) continue; // trees etc
+      if(sx.world.group[g].member[m]->camp == P->camp) continue; // we are 2, 1 is enemies
+      if(sx.world.group[g].member[m]->hitpoints <= 0.0f) continue;
+      float x[3] = {sx.world.group[g].member[m]->body.c[0] - P->body.c[0], 0.0,
+        sx.world.group[g].member[m]->body.c[2] - P->body.c[2]};
+      if(dot(x,x) > 800*800) continue;
+      if(!next && P->engaged == sx.world.group[g].member[m] - sx.world.entity)
+      {
+        next = 1;
+        continue; // cycle
+      }
+      P->engaged = sx.world.group[g].member[m] - sx.world.entity;
+      return;
+    }
+  }
+}
+
 int sx_vid_handle_input()
 {
+  sx_entity_t *P = sx.world.entity + sx.world.player_entity;
   SDL_Event event;
+  static float collective_trim = 0.2f;
   while(SDL_PollEvent(&event))
   {
     switch(event.type)
@@ -1589,6 +1726,26 @@ int sx_vid_handle_input()
       case SDL_KEYDOWN:
       switch(event.key.keysym.sym)
       {
+        case SDLK_RETURN: // select target
+          sx_heli_control_engage_target();
+          break;
+        case SDLK_COMMA: // next waypoint
+          P->curr_wp++;
+          if(P->curr_wp > sx.world.group[0].num_waypoints) P->curr_wp = 0;
+          break;
+        case SDLK_y: // tail rotor auto pilot
+          P->ctl.autopilot_rot = 1-P->ctl.autopilot_rot;
+          break;
+        case SDLK_i: // altitude above ground level auto pilot
+          P->ctl.autopilot_alt = 1-P->ctl.autopilot_alt;
+          P->ctl.autopilot_alt_target = P->stat.alt_above_ground;
+          break;
+        case SDLK_d: // heading auto pilot at current speed? to way point? zero hover?
+          P->ctl.autopilot_vel = 1-P->ctl.autopilot_vel;
+          P->ctl.autopilot_vel_target[0] = 0.0f; // steady hover
+          P->ctl.autopilot_vel_target[1] = 0.0f;
+          P->ctl.autopilot_vel_target[2] = 0.0f;
+          break;
         case SDLK_p:
           sx.paused = 1-sx.paused;
           break;
@@ -1624,106 +1781,84 @@ int sx_vid_handle_input()
           sx.cam.hfov /= 1.1f;
           sx.cam.vfov = sx.cam.hfov * sx.height/(float)sx.width;
           break;
-        case SDLK_d: // down
-          {
-            float pos[3] = {sx.cam.x[0], 0.0, sx.cam.x[2]};
-            pos[1] = sx_world_get_height(pos);
-            float off[3] = {0, 1, 0};
-            quat_t q;
-            quat_init_angle(&q, 0, 1, 0, 0);
-            sx_camera_target(&sx.cam, pos, &q, off, 0.02f, 0.02f);
-          }
-          break;
-#if 0
-        case SDLK_t: // top
-          {
-            float pos[3] = {sx.cam.x[0], 2050.0, sx.cam.x[2]};
-            float off[3] = {0, 0, 0};
-            quat_t q;
-            quat_init_angle(&q, M_PI/2.0f, 1, 0, 0);
-            sx_camera_target(&sx.cam, pos, &q, off, 1.0f, 1.0f);
-            sx_camera_move(&sx.cam, 0.01f);
-            sx_camera_target(&sx.cam, pos, &q, off, 0.02f, 0.02f);
-          }
-          break;
-#endif
         case SDLK_1:
-          sx_heli_control_collective(sx.world.player_move, 0.1);
+          sx_heli_control_collective(&P->ctl, 0.1);
           break;
         case SDLK_2:
-          sx_heli_control_collective(sx.world.player_move, 0.2);
+          sx_heli_control_collective(&P->ctl, 0.2);
           break;
         case SDLK_3:
-          sx_heli_control_collective(sx.world.player_move, 0.3);
+          sx_heli_control_collective(&P->ctl, 0.3);
           break;
         case SDLK_4:
-          sx_heli_control_collective(sx.world.player_move, 0.4);
+          sx_heli_control_collective(&P->ctl, 0.4);
           break;
         case SDLK_5:
-          sx_heli_control_collective(sx.world.player_move, 0.5);
+          sx_heli_control_collective(&P->ctl, 0.5);
           break;
         case SDLK_6:
-          sx_heli_control_collective(sx.world.player_move, 0.6);
+          sx_heli_control_collective(&P->ctl, 0.6);
           break;
         case SDLK_7:
-          sx_heli_control_collective(sx.world.player_move, 0.7);
+          sx_heli_control_collective(&P->ctl, 0.7);
           break;
         case SDLK_8:
-          sx_heli_control_collective(sx.world.player_move, 0.8);
+          sx_heli_control_collective(&P->ctl, 0.8);
           break;
         case SDLK_9:
-          sx_heli_control_collective(sx.world.player_move, 0.9);
+          sx_heli_control_collective(&P->ctl, 0.9);
           break;
         case SDLK_0:
-          sx_heli_control_collective(sx.world.player_move, 1.0);
+          sx_heli_control_collective(&P->ctl, 1.0);
           break;
         case SDLK_UP:
-          sx_heli_control_cyclic_z(sx.world.player_move, 1);
+          sx_heli_control_cyclic_z(&P->ctl, 1);
           break;
         case SDLK_DOWN:
-          sx_heli_control_cyclic_z(sx.world.player_move, -1);
+          sx_heli_control_cyclic_z(&P->ctl, -1);
           break;
         case SDLK_RIGHT:
-          sx_heli_control_cyclic_x(sx.world.player_move, 1);
+          sx_heli_control_cyclic_x(&P->ctl, 1);
           break;
         case SDLK_LEFT:
-          sx_heli_control_cyclic_x(sx.world.player_move, -1);
+          sx_heli_control_cyclic_x(&P->ctl, -1);
           break;
         // left hand:
         case SDLK_PERIOD:
-          sx_heli_control_increase_collective(sx.world.player_move, 0.1);
+          sx_heli_control_increase_collective(&P->ctl, 0.1);
           break;
         case SDLK_e:
-          sx_heli_control_increase_collective(sx.world.player_move, -0.1);
+          sx_heli_control_increase_collective(&P->ctl, -0.1);
           break;
         case SDLK_o:
-          sx_heli_control_tail(sx.world.player_move, -1);
+          sx_heli_control_tail(&P->ctl, -1);
           break;
         case SDLK_u:
-          sx_heli_control_tail(sx.world.player_move, 1);
+          sx_heli_control_tail(&P->ctl, 1);
           break;
         // right hand:
         case SDLK_h:
-          sx_heli_control_cyclic_x(sx.world.player_move, -1);
+          sx_heli_control_cyclic_x(&P->ctl, -1);
           break;
         case SDLK_n:
-          sx_heli_control_cyclic_x(sx.world.player_move, 1);
+          sx_heli_control_cyclic_x(&P->ctl, 1);
           break;
         case SDLK_c:
-          sx_heli_control_cyclic_z(sx.world.player_move, 1);
+          sx_heli_control_cyclic_z(&P->ctl, 1);
           break;
         case SDLK_t:
-          sx_heli_control_cyclic_z(sx.world.player_move, -1);
+          sx_heli_control_cyclic_z(&P->ctl, -1);
           break;
         case SDLK_g:
-          sx_heli_control_gear(sx.world.player_move);
+          sx_heli_control_gear(&P->ctl);
           break;
         case SDLK_f:
-          sx_heli_control_flap(sx.world.player_move);
+          sx_heli_control_flap(&P->ctl);
           break;
         case SDLK_SPACE:
           // XXX need generic heli interface here too
-          sx_spawn_rocket(sx.world.entity + sx.world.player_entity);
+          P->ctl.trigger_fire = 1;
+          sx_spawn_rocket(P);
           break;
       }
       break;
@@ -1734,16 +1869,19 @@ int sx_vid_handle_input()
         case SDLK_t:
         case SDLK_UP:
         case SDLK_DOWN:
-          sx_heli_control_cyclic_z(sx.world.player_move, 0);
+          sx_heli_control_cyclic_z(&P->ctl, 0);
         case SDLK_n:
         case SDLK_h:
         case SDLK_RIGHT:
         case SDLK_LEFT:
-          sx_heli_control_cyclic_x(sx.world.player_move, 0);
+          sx_heli_control_cyclic_x(&P->ctl, 0);
           break;
         case SDLK_o:
         case SDLK_u:
-          sx_heli_control_tail(sx.world.player_move, 0);
+          sx_heli_control_tail(&P->ctl, 0);
+          break;
+        case SDLK_SPACE:
+          P->ctl.trigger_fire = 0;
           break;
       }
       break;
@@ -1752,37 +1890,38 @@ int sx_vid_handle_input()
       {
 #if 0 // regular joystick
         case 0:
-          sx_heli_control_cyclic_x(sx.world.player_move, event.jaxis.value/(float)0x7fff);
+          sx_heli_control_cyclic_x(&P->ctl, event.jaxis.value/(float)0x7fff);
           break;
         case 1:
-          sx_heli_control_cyclic_z(sx.world.player_move, -event.jaxis.value/(float)0x7fff);
+          sx_heli_control_cyclic_z(&P->ctl, -event.jaxis.value/(float)0x7fff);
           break;
         case 2:
           {
           // // remap to avoid dead zone on retarded thrustmaster T.Flight Hotas X
           float t = event.jaxis.value/(float)0x7fff;
           // if(t > 0) t *= 0.5f; // overdrive
-          sx_heli_control_collective(sx.world.player_move, 0.5f + 0.5*t);
+          sx_heli_control_collective(&P->ctl, 0.5f + 0.5*t);
           break;
           }
         case 3:
-          sx_heli_control_tail(sx.world.player_move, event.jaxis.value/(float)0x7fff);
+          sx_heli_control_tail(&P->ctl, event.jaxis.value/(float)0x7fff);
           break;
         case 4:
           sx.cam.angle_right = event.jaxis.value/(float)0x7fff;
           break;
 #else // gamepad. tried with a sony playstation thing (dualshock 4). see jstest-gtk for axis number and then play with this:
         case 3:
-          sx_heli_control_cyclic_x(sx.world.player_move, event.jaxis.value/(float)0x7fff);
+          sx_heli_control_cyclic_x(&P->ctl, event.jaxis.value/(float)0x7fff);
           break;
         case 4:
-          sx_heli_control_cyclic_z(sx.world.player_move, -event.jaxis.value/(float)0x7fff);
+          sx_heli_control_cyclic_z(&P->ctl, -event.jaxis.value/(float)0x7fff);
           break;
         case 1:
-          sx_heli_control_increase_collective(sx.world.player_move, 0.01 * event.jaxis.value/(float)0x7fff);
+          sx_heli_control_collective(&P->ctl, collective_trim + event.jaxis.value/(float)0x7fff);
+          // sx_heli_control_increase_collective(&P->ctl, 0.01 * event.jaxis.value/(float)0x7fff);
           break;
         case 0:
-          sx_heli_control_tail(sx.world.player_move, event.jaxis.value/(float)0x7fff);
+          sx_heli_control_tail(&P->ctl, event.jaxis.value/(float)0x7fff);
           break;
         case 2:
           sx.cam.angle_right = -.5-.5*event.jaxis.value/(float)0x7fff;
@@ -1813,25 +1952,42 @@ int sx_vid_handle_input()
       case SDL_JOYBUTTONDOWN:
       switch(event.jbutton.button)
       {
-        case 0: // pretend we have a cannon:
+        case 0:
           // XXX need generic heli interface here too
-          sx_spawn_rocket(sx.world.entity + sx.world.player_entity);
+          P->ctl.trigger_fire = 1;
+          sx_spawn_rocket(P);
           break;
+        case 1:
+          sx_heli_control_engage_target();
+          break;
+#if 0 // joystick hat)
         case 3:
-          sx_heli_control_tail(sx.world.player_move, -1);
+          sx_heli_control_tail(&P->ctl, -1);
           break;
         case 4:
-          sx_heli_control_tail(sx.world.player_move, 1);
+          sx_heli_control_tail(&P->ctl, 1);
+          break;
+#endif
+        // dualshock
+        case 4:
+          collective_trim -= 0.1f;
+          sx_heli_control_collective(&P->ctl, collective_trim);
+          break;
+        case 5:
+          collective_trim += 0.1f;
+          sx_heli_control_collective(&P->ctl, collective_trim);
           break;
       }
       break;
       case SDL_JOYBUTTONUP:
       switch(event.jbutton.button)
       {
+#if 0
         case 3:
         case 4:
-          sx_heli_control_tail(sx.world.player_move, 0);
+          sx_heli_control_tail(&P->ctl, 0);
           break;
+#endif
       }
       break;
     }

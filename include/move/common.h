@@ -70,6 +70,24 @@ sx_move_init(sx_entity_t *e)
   }
   MOVE_LIST
 #undef MOVE_DO
+  if(!strncmp(move, "wing", 4)) {
+    e->move = (sx_move_t){
+      .id            = "wing",
+      .update_forces = sx_move_helo_update_forces,
+      .damage        = sx_move_helo_damage,
+      .think         = sx_move_helo_think, // TODO: put different thing here
+    };
+    return sx_move_helo_init(e);
+  }
+  if(!strncmp(move, "plyr", 4)) {
+    e->move = (sx_move_t){
+      .id            = "plyr",
+      .update_forces = sx_move_helo_update_forces,
+      .damage        = sx_move_helo_damage,
+      .think         = sx_move_helo_think, // TODO: put different thing here
+    };
+    return sx_move_helo_init(e);
+  }
   e->move = (sx_move_t){
     .id     = "none",
     .damage = sx_move_default_damage,

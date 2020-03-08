@@ -95,34 +95,21 @@ sx_plot_parts(
     quat_t mq;
     quat_mul(bq, &rq, &mq);
 
-#if 0 // TODO: fix this
-      // for motion vectors, previous frame:
-      // TODO: old_anim
-      const quat_t *omq = &ent->prev_q;
-      quat_t orq;
-      if(part_rot[g][0] != 0.0f)
-        quat_init_angle(&orq, sx.time * part_rot[g][0], part_rot[g][1], part_rot[g][2], part_rot[g][3]);
-      else quat_init(&orq, 1, 0, 0, 0);
-      float ovo[3] = {
-        ft2m(part_pos[g][0]),
-        ft2m(part_pos[g][1]),
-        ft2m(part_pos[g][2]),
-      }; // old offset in model space is the same
-      quat_transform(omq, ovo); // model to world space
-      float omvx[3] = {
-        ent->prev_x[0]-sx.cam.prev_x[0]+ovo[0],
-        ent->prev_x[1]-sx.cam.prev_x[1]+ovo[1],
-        ent->prev_x[2]-sx.cam.prev_x[2]+ovo[2]};
-      quat_t iovq = sx.cam.prev_q;
-      quat_conj(&iovq);
-      quat_transform(&iovq, omvx);
-      quat_t otmp, omvq;
-      quat_mul(&iovq, omq, &otmp);
-      quat_mul(&otmp, &orq, &omvq);
-
-      sx_vid_push_geo_instance(obj->geoid[g], mp, &mq, mp, &mq);
+#if 1 // for motion vectors, previous frame:
+    // TODO: old_anim
+    float ovo[3] = {
+      off[0], off[1], off[2]
+    }; // offset in model space
+    if(cmm) for(int k=0;k<3;k++) ovo[k] -= cmm[k];
+    quat_transform(&ent->prev_q, ovo); // model to world space
+    float omp[3] = {
+      ent->prev_x[0]+ovo[0],
+      ent->prev_x[1]+ovo[1],
+      ent->prev_x[2]+ovo[2]};
+    quat_t omq;
+    quat_mul(&ent->prev_q, &rq, &omq);
 #endif
-    sx_vid_push_geo_instance(obj->geoid[g], mp, &mq, mp, &mq, part[p].frame);
+    sx_vid_push_geo_instance(obj->geoid[g], omp, &omq, mp, &mq, part[p].frame);
   }
 }
 

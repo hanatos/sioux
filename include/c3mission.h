@@ -55,8 +55,6 @@ typedef struct c3_mission_t
 
   // radio message texts
   char radiomessage[100][256];
-  // way point lists with 20 x y coords
-  float waypoint[26][20][2];
 
   // run time stuff for triggers:
   uint32_t num_triggers;

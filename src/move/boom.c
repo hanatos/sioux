@@ -45,8 +45,7 @@ void
 sx_move_boom_think(sx_entity_t *e)
 {
   sx_move_boom_t *r = e->move_data;
-  r->timeout--;
-  if(r->timeout <= 0)
+  if(sx.time - r->timeout >= 19*200) // consider .ai frame count? 200ms per frame, nukeboom has 20 frames.
     sx_world_remove_entity(e - sx.world.entity); // remove us
 }
 
@@ -56,6 +55,6 @@ sx_move_boom_init(sx_entity_t *e)
   sx_move_boom_t *r = malloc(sizeof(*r));
   memset(r, 0, sizeof(*r));
   e->move_data = r;
-  r->timeout = 200;
+  r->timeout = sx.time;
 }
 

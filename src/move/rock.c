@@ -25,12 +25,29 @@ sx_move_rock_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
   sx_rigid_body_apply_force(b, &grav);
   if(r->fuel > 0)
   { // thrust of rocket booster
+    float c = 80000.0f;
     sx_actuator_t thrust = {
-      .f = {0.0f, 0.0f, 80000.0f},
+      .f = {0.0f, 0.0f, c},
       .r = {0.0f, 0.0f, 0.0f},
     };
     quat_transform(&b->q, thrust.f);
     sx_rigid_body_apply_force(b, &thrust);
+    if(e->parent && e->parent->engaged != -1u)
+    {
+      float d[] = {
+        sx.world.entity[e->parent->engaged].body.c[0] - e->body.c[0],
+        sx.world.entity[e->parent->engaged].body.c[1] - e->body.c[1],
+        sx.world.entity[e->parent->engaged].body.c[2] - e->body.c[2]};
+      c *= .3;
+      normalise(d);
+      d[1] += 0.2;
+      normalise(d);
+      sx_actuator_t steer = {
+        .f = {c*d[0], c*d[1], c*d[2]},
+        .r = {0.0f, 0.0f, 0.0f},
+      };
+      sx_rigid_body_apply_force(b, &steer);
+    }
   }
 }
 
@@ -75,7 +92,7 @@ void
 sx_move_rock_init(sx_entity_t *e)
 {
   sx_move_rock_t *r = malloc(sizeof(*r));
-  r->fuel = 100;
+  r->fuel = 200;
   for(int k=0;k<3;k++) r->last_p[k] = -1.0;
   e->move_data = r;
 }

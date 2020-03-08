@@ -25,6 +25,11 @@ vec2 screen_space(vec4 vertex)
   return (clamp(vertex.xy, -1.3, 1.3)+1) * (u_res*0.5);
 }
 
+float dist_lod(vec4 v0, vec4 v1)
+{
+  return 8.0/(u_lod*.5*(v0.z+v1.z));
+}
+
 float level(vec2 v0, vec2 v1)
 {
   // TODO: also clamp to the world space distance, no need to go smaller than texture size
@@ -55,6 +60,7 @@ void main()
     }
     else
     {
+#if 1
       vec2 ss0 = screen_space(v0);
       vec2 ss1 = screen_space(v1);
       vec2 ss2 = screen_space(v2);
@@ -67,6 +73,12 @@ void main()
       float e1 = level(ss0, ss1);
       float e2 = level(ss3, ss0);
       float e3 = level(ss2, ss3);
+#else
+      float e0 = dist_lod(v1, v2);
+      float e1 = dist_lod(v0, v1);
+      float e2 = dist_lod(v3, v0);
+      float e3 = dist_lod(v2, v3);
+#endif
 
       gl_TessLevelInner[0] = mix(e1, e2, 0.5);
       gl_TessLevelInner[1] = mix(e0, e3, 0.5);

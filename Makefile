@@ -1,8 +1,8 @@
 CC=gcc
 CFLAGS=-Wall -std=c11
 CFLAGS+=-Iinclude -I.
-CFLAGS+=-g -O3 -march=native -D_GNU_SOURCE -D_XOPEN_SOURCE=600 -Iext/pthread-pool
-LDFLAGS=-lm -Lext/pthread-pool -lpthreadpool -pthread
+CFLAGS+=-g -O3 -march=native -D_GNU_SOURCE -D_XOPEN_SOURCE=600
+LDFLAGS=-lm
 
 LDFLAGS+=$(shell pkg-config --libs libpng)
 CFLAGS+=$(shell pkg-config --cflags libpng)
@@ -12,10 +12,7 @@ SDL_C+=$(shell pkg-config --cflags sdl2) $(shell pkg-config --cflags glew)
 SDL_L+=$(shell pkg-config --libs SDL2_mixer)
 SDL_C+=$(shell pkg-config --cflags SDL2_mixer)
 
-all: pcx model anim sx png2bc3 pthreadpool
-
-pthreadpool:
-	+make -C ext/pthread-pool
+all: pcx model anim sx png2bc3
 
 sanitize: CFLAGS+=-fno-omit-frame-pointer -fsanitize=address
 sanitize: all
@@ -42,8 +39,8 @@ HEADERS=include/assets.h\
         include/sx.h\
         include/physics/rigidbody.h\
         include/physics/aerofoil.h\
-        include/physics/heli.h\
-        include/physics/accel.h\
+        include/physics/obb_obb.h\
+        include/physics/grid.h\
         include/plot/common.h\
         include/move/common.h\
         include/world.h\
@@ -54,13 +51,11 @@ SX_FILES=src/sx.c\
          src/assets.c\
          src/sound.c\
          src/music.c\
-         src/threads.c\
          src/triggers.c\
          src/c3mission.c\
          src/c3object.c\
          src/hud.c\
-         src/physics/heli.c\
-         src/physics/qbvhmp.c\
+         src/physics/grid.c\
          src/move/toss.c\
          src/move/helo.c\
          src/move/boom.c\

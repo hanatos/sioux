@@ -53,11 +53,11 @@ typedef struct sx_vid_t
   uint32_t vao_hud_text, vbo_hud_text[3];
   uint32_t hud_text_chars; // number of characters, 100 max
   uint64_t hud_text_font;  // texture handle (bindless)
-  float hud_text_vx[800], hud_text_uv[800];
-  uint32_t hud_text_id[600];
+  float hud_text_vx[2000], hud_text_uv[2000];
+  uint32_t hud_text_id[2000];
 
   uint32_t debug_line_cnt;
-  float debug_line_vx[2000];
+  float debug_line_vx[20000];
   uint32_t vao_debug_line, vbo_debug_line;
 
   uint32_t vao_terrain, vbo_terrain[2];

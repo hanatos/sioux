@@ -23,6 +23,7 @@ sx_spawn_child(uint32_t obj, sx_entity_t *p)
     sx.world.entity[eid].body.pv[k] = p->body.pv[k] * mr;
   for(int k=0;k<3;k++)
     sx.world.entity[eid].body.pw[k] = p->body.pw[k] * mr;
+  sx.world.entity[eid].parent = p;
   return eid;
 }
 

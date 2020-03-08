@@ -4,7 +4,6 @@
 #include "triggers.h"
 #include "camera.h"
 #include "sx.h"
-#include "physics/heli.h"
 #include "move/common.h"
 
 // TODO: need these return values?
@@ -12,6 +11,7 @@ int
 c3_mission_begin(
     c3_mission_t *mis)
 {
+  sx.world.num_static_entities = 0; // not yet running, allocate entities the simple way
   char filename[256];
   mis->gamestate = C3_GAMESTATE_FLIGHT;
   c3_triggers_parse_music(filename, mis->music, C3_GAMESTATE_PAD, 'f');
@@ -64,33 +64,9 @@ c3_mission_begin(
     const float heading = 2.0f*M_PI*f[i].heading/(float)0xffff;
     quat_from_euler(&q, 0, 0, heading);
     uint32_t eid = sx_world_add_entity(objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i));
-    // wire move routines:
-    if(!strncmp(sx.assets.object[objectid].move, "helo", 4))
-    {
-      sx.world.entity[eid].move_data = malloc(sizeof(sx_heli_t)); // XXX call helo_init
-      sx.world.entity[eid].move.update_forces = sx_move_helo_update_forces;
-      // TODO: wire damage func
-    }
-#if 0 // XXX DEBUG
-    if(strcmp(sx.assets.object[objectid].filename, "oak4"))
-    {
-      fprintf(stderr, "%s ent %u at %g %g %g obj %u | '%c' %d\n",
-          sx.assets.object[objectid].filename,
-          eid, pos[0], pos[1], pos[2], objectid,
-          'A' + c3_pos_groupid(f+i), c3_pos_groupid(f+i));
-      fprintf(stderr, "extra %u %u %u %d %u %u %u %u\n", f[i].zero0,
-          f[i].zero1, f[i].zero2, f[i].what0, f[i].flags[0], f[i].flags[1],
-          f[i].flags[2], f[i].flags[3]);
-      fprintf(stderr, "block %d\n", block);
-    }
-#endif
     // found start position:
     if(!strcmp(sx.assets.object[objectid].filename, "startpos"))
-    {
-      // fprintf(stderr, "startpos entity %u at %g %g %g tile %d %d\n", //with extra %hX %hX %d %d\n",
-      //     eid, pos[0], pos[1], pos[2], f[i].tilex, f[i].tiley);
       startposid = eid;
-    }
   }
 
   const uint32_t player_objectid = 0; // XXX get this while reading the assets!
@@ -108,23 +84,14 @@ c3_mission_begin(
   sx_camera_target(&sx.cam, pos, &q, off, 1, 1);
   sx_camera_move(&sx.cam, 1);
 
-  // add movement controller:
+  // remember player entity
   sx.world.player_entity = eid;
-
-  // setup helicopter movement! yay!
-  sx.world.player_move = malloc(sizeof(sx_heli_t));
-  sx_heli_init(sx.world.player_move, sx.world.entity + eid);
-  sx.world.entity[eid].move_data = sx.world.player_move;
-  sx.world.entity[eid].move = (sx_move_t) {
-    .id            = "plyr",
-    .update_forces = sx_heli_update_forces,
-    .damage        = sx_heli_damage,
-    .snd_ambient   = sx_assets_load_sound(&sx.assets, "comanche.wav"),
-  };
-
   free(orig);
 
-  // setup dynamic entities
+  // TODO: if networking, this would be a good time to wait for others..
+
+  // remember where dynamic entities start in the buffer
+  sx.world.num_static_entities = sx.world.num_entities;
   return 0;
 }
 
@@ -146,17 +113,18 @@ c3_mission_pump_events(
     c3_triggers_parse_music(filename, mis->music, mis->gamestate, 'f');
     sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), -1);
   }
-  const float *player_pos = sx.world.entity[sx.world.player_entity].body.c;
+  sx_entity_t *P = sx.world.entity + sx.world.player_entity;
+  const float *player_pos = P->body.c;
+  const int gid = 0;
   float wp[] = {
-    sx.mission.waypoint[0][sx.world.player_wp][0] - player_pos[0],
+    sx.world.group[gid].waypoint[P->curr_wp][0] - player_pos[0],
     0.0f,
-    sx.mission.waypoint[0][sx.world.player_wp][1] - player_pos[2]};
-  if(dot(wp, wp) < 200.0f*200.0f &&
-      sx.world.player_wp <= 10)
-    sx.world.player_wp++;
+    sx.world.group[gid].waypoint[P->curr_wp][1] - player_pos[2]};
+  if(dot(wp, wp) < 200.0f*200.0f && P->curr_wp <= 10)
+    P->curr_wp++;
 
   c3_triggers_check(mis);
-  sx.world.player_old_wp = sx.world.player_wp;
+  P->prev_wp = P->curr_wp;
   mis->time ++;
   //if(mis->counter > 0)
     mis->counter ++;
@@ -321,14 +289,13 @@ c3_mission_load(
       sscanf(line, "%d, %d", &x, &y);
 
     // TODO: maybe the *2 is a wrong bit count when reading the pos file?
-    mis->waypoint[wp_list][wp][0] = -ft2m(3.0f*x*2.0f);
-    mis->waypoint[wp_list][wp][1] = -ft2m(3.0f*y*2.0f);
+    sx.world.group[wp_list].waypoint[wp][0] = -ft2m(3.0f*x*2.0f);
+    sx.world.group[wp_list].waypoint[wp][1] = -ft2m(3.0f*y*2.0f);
     // if(wp_list == 0) fprintf(stderr, "%s ", name);
     // fprintf(stderr, "wp %c%d %g %g\n", 'A' + wp_list, wp+1, 8.0f*x, -8.0f*y);
     wp++;
+    sx.world.group[wp_list].num_waypoints = wp;
   }
-  sx.world.player_wp = 0;
-  sx.world.player_weapon = 0;
 
   mis->time = 0;
   mis->counter = 0;

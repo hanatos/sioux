@@ -1,7 +1,5 @@
 #include "sx.h"
 #include "physics/rigidbody.h"
-#include "physics/heli.h"
-#include "physics/accel.h"
 #include "physics/obb_obb.h"
 #include "plot/common.h"
 #include "pngio.h"
@@ -11,13 +9,14 @@
 
 static void
 compute_one_aabb(
-    uint64_t  eid,
-    float    *aabb)
+    uint32_t eid,
+    float    aabb[6])
 {
-  sx_entity_t *e = sx.world.entity + eid;
-  const float *mb = sx.assets.object[e->objectid].aabb;
   aabb[0] = aabb[1] = aabb[2] =  FLT_MAX;
   aabb[3] = aabb[4] = aabb[5] = -FLT_MAX;
+  sx_entity_t *e = sx.world.entity + eid;
+  if(e->objectid == -1u) return;
+  const float *mb = sx.assets.object[e->objectid].aabb;
   for(int j=0;j<8;j++)
   { // transform the 8 corners and bound them
     float x[3];
@@ -34,29 +33,16 @@ compute_one_aabb(
   }
 }
 
-static void
-compute_aabb(
-    uint64_t  beg,
-    uint64_t  end,
-    float    *aabb)
-{
-  // fill bounding boxes of all objects in [beg, end)
-  // one object in the bvh will be one entity. the primitives
-  // will be the obb of the individual geo parts
-  for(uint64_t i=beg;i<end;i++)
-    compute_one_aabb(i, aabb+6*i);
-}
-
 void sx_world_init()
 {
   // 2000 entities is enough for everyone, right?
   // if not the bvh should probably reallocate internally.
-  sx.world.bvh = accel_init(2000, compute_aabb);
+  sx_grid_init(&sx.world.grid, 4000);
 }
 
 void sx_world_cleanup()
 {
-  accel_cleanup(sx.world.bvh);
+  sx_grid_cleanup(&sx.world.grid);
 }
 
 // apply one step of runge-kutta 4 integration
@@ -69,20 +55,31 @@ sx_world_move_entity(
   if(!e->move_data) return;
   if(!e->move.update_forces) return;
 
-  if(sx.assets.object[e->objectid].collidable)
+  // TODO: wrong, only query all moving objects, and collidable end up in grid in the first place!
+  // if(sx.assets.object[e->objectid].collidable)
+  // trails are no projectile and not collidable, don't care about them here:
+  if(sx.assets.object[e->objectid].projectile ||
+      sx.assets.object[e->objectid].collidable)
   {
-    uint64_t coll_ent[10];
-    uint64_t coll_cnt = 10;
-    float aabb[6]; // world space aabb
+    // fprintf(stderr, "coll new query======\n");
+    uint32_t coll_ent[10];
+    uint32_t coll_cnt = 10;
+    float aabb[6] = {0}; // world space aabb
     const int eid = e - sx.world.entity;
     compute_one_aabb(eid, aabb);
-    coll_cnt = accel_collide(sx.world.bvh, aabb, eid, coll_ent, coll_cnt);
+    coll_cnt = sx_grid_query(&sx.world.grid, aabb, coll_ent, coll_cnt);
     for(int i=0;i<coll_cnt;i++)
     {
       sx_entity_t *e2 = sx.world.entity+coll_ent[i];
-      if(sx.assets.object[e2->objectid].projectile)
-        if(e->move.damage)
-          e->move.damage(e, e2, 0.0f);
+      if(e2 != e)
+      {
+        // fprintf(stderr, "colliding! %s %s\n",
+        //      e->objectid != -1u? sx.assets.object[ e->objectid].filename : "(null)",
+        //     e2->objectid != -1u? sx.assets.object[e2->objectid].filename : "(null)");
+      // if(sx.assets.object[e2->objectid].projectile)
+        if(e2->move.damage)
+          e2->move.damage(e2, e, 0.0f);
+      }
     }
   }
 
@@ -90,6 +87,7 @@ sx_world_move_entity(
     e->prev_x[k] = e->body.c[k];
   e->prev_q = e->body.q;
 
+#if 1
   // runge kutta 4:
   // (a)
   sx_rigid_body_t a = e->body;
@@ -110,12 +108,20 @@ sx_world_move_entity(
   e->move.update_forces(e, &d);
   // now update p pv q pw with 1/6 dt 1 2 2 1 rule.
   sx_rigid_body_move_rk4(&e->body, &a, &b, &c, &d, dt);
+#else
+  // euler, this is mad:
+  sx_rigid_body_t b = e->body;
+  e->move.update_forces(e, &b);
+  sx_rigid_body_eval(&e->body, &b, dt);
+  sx_rigid_body_move(&e->body, &b, dt);
+#endif
 }
 
 static int
 sx_world_collide_terrain(
     sx_entity_t *e)
 {
+  if(e->objectid == -1u) return 0;
   if(!e->move_data) return 0;
   if(!e->move.update_forces) return 0;
 
@@ -138,20 +144,31 @@ sx_world_collide_terrain(
 // TODO: collision detection and interaction between objects
 void sx_world_move(const uint32_t dt_milli)
 {
+  clock_t beg = clock();
   sx_vid_clear_debug_line();
   const float dt = dt_milli / 1000.0f; // delta t in seconds
 
-  // build collision detection bvh every time because why not
-  accel_set_prim_cnt(sx.world.bvh, sx.world.num_entities);
-  accel_build_async(sx.world.bvh);
-  // could do expensive GPU stuff here..
-  accel_build_wait(sx.world.bvh);
+  sx_grid_clear(&sx.world.grid);
+
+  // build collision detection bvh every time because why not.
+  // could insert in parallel if the grid used an atomic counter.
+  for(int i=0;i<sx.world.num_entities;i++)
+  {
+    if(sx.world.entity[i].objectid != -1u && sx.assets.object[sx.world.entity[i].objectid].collidable)
+    {
+      float aabb[6];
+      compute_one_aabb(i, aabb);
+      sx_grid_add(&sx.world.grid, aabb, i);
+    }
+  }
+
+  sx_grid_build(&sx.world.grid);
 
   // move entities based on the forces we collected during the last iteration
   // TODO: do in our thread pool, faster (openmp needs 2ms thread startup time)
-#ifdef _OPENMP
-#pragma omp parallel for
-#endif
+// #ifdef _OPENMP
+// #pragma omp parallel for
+// #endif
   for(int i=0;i<sx.world.num_entities;i++)
   {
     sx_world_move_entity(sx.world.entity + i, dt);
@@ -228,13 +245,18 @@ void sx_world_move(const uint32_t dt_milli)
   }
 
   sx_camera_move(&sx.cam, dt);
+  clock_t end = clock();
+  double ms = 1000.0*(end-beg)/(double)CLOCKS_PER_SEC;
+  if(ms > 5)
+    fprintf(stderr, "\n ! world move %g ms for %d entities !\n", ms,
+        sx.world.num_entities);
 }
 
 void sx_world_render_entity(uint32_t ei)
 {
-  if(ei < 0 || ei >= sx.world.num_entities) return;
+  if(ei == -1u || ei >= sx.world.num_entities) return;
   uint32_t oi = sx.world.entity[ei].objectid;
-  if(oi < 0 || oi >= sx.assets.num_objects) return;
+  if(oi == -1u || oi >= sx.assets.num_objects) return;
 
   const sx_entity_t *ent = sx.world.entity+ei;
   // LOD: discard stuff > 2km
@@ -305,9 +327,25 @@ void
 sx_world_remove_entity(
     uint32_t eid)
 {
+#if 0
+  // XXX this invalidates entity ids (sx.world.player_entity potentially..)
+  // XXX this invalidates ownership (entity->parent)
+  // XXX this may leave the entity list inconsistent for networking!
   sx.world.num_entities--;
   sx.world.entity[eid] = sx.world.entity[sx.world.num_entities];
   memset(sx.world.entity + sx.world.num_entities, 0, sizeof(sx_entity_t));
+#endif
+  // after loading mission, set a dynamic entity offset to the end of the buffer
+  // from now on, only temporary/dynamic entities may be spawned
+  // i.e. we assume they go away after some short time
+  // removal : mark entity as removed (objectid == -1u?)
+  // addition: search from dynamic offset for dead entry, populate that one
+  // parent pointers may now still lead to empty slots and to wrong objects :(
+  memset(sx.world.entity + eid, 0, sizeof(sx_entity_t));
+  // XXX FIXME: this is not a good idea, can we mark something else?
+  sx.world.entity[eid].objectid = -1u;
+  if(eid == sx.world.num_entities-1 && eid >= sx.world.num_static_entities)
+    sx.world.num_entities--;
 }
 
 uint32_t
@@ -318,13 +356,30 @@ sx_world_add_entity(
     char id,             // mission relevant id
     uint8_t camp)        // good guy, bad guy, neutral
 {
-  if(sx.world.num_entities >= sizeof(sx.world.entity)/sizeof(sx.world.entity[0]))
-    return -1;
-  int eid = sx.world.num_entities++;
+  int eid = -1;
+  if(sx.world.num_static_entities > 0)
+  { // dynamic allocation, try to not make a mess of entity ids:
+    for(int i=sx.world.num_static_entities;i<sx.world.num_entities;i++)
+    {
+      if(sx.world.entity[i].objectid == -1u)
+      {
+        eid = i;
+        break;
+      }
+    }
+  }
+  if(eid == -1)
+  { // simple allocation while loading the mission, or didn't find a free slot:
+    if(sx.world.num_entities >= sizeof(sx.world.entity)/sizeof(sx.world.entity[0]))
+      return -1;
+    eid = sx.world.num_entities++;
+  }
+
   memset(sx.world.entity + eid, 0, sizeof(sx_entity_t));
 
   // geometry stuff:
   sx.world.entity[eid].objectid = objectid;
+  sx.world.entity[eid].engaged = -1u;
   sx.world.entity[eid].id = id;
   sx.world.entity[eid].camp = camp;
   sx.world.entity[eid].hitpoints = sx.assets.object[objectid].hitpoints;
@@ -344,6 +399,22 @@ sx_world_add_entity(
   sx.world.entity[eid].prev_x[1] = ht;
   sx.world.entity[eid].body.c[1] = ht;
 
+  // group entities:
+  int gid = sx.world.entity[eid].id;
+  if(gid)
+  {
+    if(sx.world.group[gid-'A'].num_members <
+        sizeof(sx.world.group[gid-'A'].member) /
+        sizeof(sx.world.group[gid-'A'].member[0]))
+    {
+      int i = sx.world.group[gid-'A'].num_members++;
+      sx.world.group[gid-'A'].member[i] = sx.world.entity+eid;
+      sx.world.group[gid-'A'].camp = camp;
+    }
+  }
+
+  // TODO: move this into move default init:
+  //----
   const float rho = 50.0f; // mass density
 
   // derived quantities:
@@ -364,6 +435,7 @@ sx_world_add_entity(
   sx.world.entity[eid].body.invI[0] = 3.0f/8.0f / (rho * w * (h * l*l*l + l * h*h*h));
   sx.world.entity[eid].body.invI[4] = 3.0f/8.0f / (rho * h * (w * l*l*l + l * w*w*w));
   sx.world.entity[eid].body.invI[8] = 3.0f/8.0f / (rho * l * (w * h*h*h + h * w*w*w));
+  //----
 
   sx_move_init(sx.world.entity + eid);
   sx_plot_init(sx.world.entity + eid);
@@ -402,6 +474,6 @@ sx_world_init_terrain(
 void sx_world_think(const uint32_t dt)
 {
   for(int i=0;i<sx.world.num_entities;i++)
-    if(sx.world.entity[i].move.think)
+    if(sx.world.entity[i].objectid != -1u && sx.world.entity[i].move.think)
       sx.world.entity[i].move.think(sx.world.entity+i);
 }
