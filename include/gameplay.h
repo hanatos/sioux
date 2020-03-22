@@ -9,21 +9,9 @@ static inline uint32_t
 sx_spawn_child(uint32_t obj, sx_entity_t *p)
 {
   uint32_t eid = sx_world_add_entity(
-    obj, p->body.c, &p->body.q,
+    p, obj, p->body.c, &p->body.q,
     0, 0);
   if(eid == -1) return -1; // no more free slots
-  // in fact don't ground:
-  for(int k=0;k<3;k++) sx.world.entity[eid].prev_x[k] = p->prev_x[k];
-  sx.world.entity[eid].prev_q = p->prev_q;
-  for(int k=0;k<3;k++) sx.world.entity[eid].body.c[k] = p->body.c[k];
-  sx.world.entity[eid].body.q = p->body.q;
-  float mr = sx.world.entity[eid].body.m / p->body.m;
-  // init dependent entity's moments
-  for(int k=0;k<3;k++)
-    sx.world.entity[eid].body.pv[k] = p->body.pv[k] * mr;
-  for(int k=0;k<3;k++)
-    sx.world.entity[eid].body.pw[k] = p->body.pw[k] * mr;
-  sx.world.entity[eid].parent = p;
   return eid;
 }
 

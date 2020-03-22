@@ -28,6 +28,7 @@ typedef struct sx_plot_t
 {
   char id[4];
   void (*plot)(uint32_t ei);
+  int  (*weapons)(uint32_t *ind, int max_ind);
   int  (*collide)(const sx_entity_t *e, sx_obb_t *box, sx_part_type_t *pt);
 }
 sx_plot_t;
@@ -88,14 +89,20 @@ typedef struct sx_entity_t
   char    id;               // single letter identifying group for trigger scripting
   uint8_t camp;             // which side are you on?
 
-  uint32_t curr_wp;         // current waypoint
-  uint32_t prev_wp;         // previous waypoint
+  uint8_t  curr_wpg;
+  uint8_t  prev_wpg;
+  uint8_t  curr_wp;         // current waypoint
+  uint8_t  prev_wp;         // previous waypoint
   uint32_t weapon;          // currently equipped weapon
 
   uint32_t birth_time;      // when was this spawned?
   float hitpoints;          // how much damage can we still take?
 
   uint32_t host_owner;      // the host id that owns this entity in networking
+
+  // transient state for ai and such
+  uint32_t side;            // which side was the last fire?
+  uint32_t fire_time;       // sx.time of list fire
 }
 sx_entity_t;
 
@@ -134,6 +141,8 @@ typedef struct sx_world_t
   // that is the one with the "plyr" movement routine attached
   uint32_t player_entity;
 
+  const char *status_message;
+
   // for collision detection
   sx_grid_t grid;
 }
@@ -157,6 +166,7 @@ void sx_world_remove_entity(uint32_t ei);
 
 // TODO: probably needs /a lot/ of amending
 uint32_t sx_world_add_entity(
+    sx_entity_t *parent_or_null,
     uint32_t objectid,
     const float *pos, const quat_t *q,
     char id, uint8_t camp);

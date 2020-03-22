@@ -75,6 +75,6 @@ int main(int argc, char *argv[])
 out:
   sx_vid_end_mission();
   c3_mission_end(&sx.mission);
-  sx_cleanup(); // alse cleans vid
+  sx_cleanup(); // also cleans vid
   exit(0);
 }

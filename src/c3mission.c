@@ -1,5 +1,6 @@
 #include "c3mission.h"
 #include "c3pos.h"
+#include "c3inf.h"
 // #include "c3jim.h"
 #include "triggers.h"
 #include "camera.h"
@@ -11,11 +12,11 @@ int
 c3_mission_begin(
     c3_mission_t *mis)
 {
+  // TODO: reload triggers!
+  sx.world.num_entities = 0;
   sx.world.num_static_entities = 0; // not yet running, allocate entities the simple way
-  char filename[256];
-  mis->gamestate = C3_GAMESTATE_FLIGHT;
-  c3_triggers_parse_music(filename, mis->music, C3_GAMESTATE_PAD, 'f');
-  sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), 1);
+  mis->gamestate = C3_GAMESTATE_PAD;
+  sx_music_play(sx.assets.fmusic[sx.mission.gamestate], 1);
   sx_sound_loop(sx.assets.sound+mis->snd_engine, 5, 1000);
   uint32_t objectid = 0;
   uint32_t startposid = 0;
@@ -63,7 +64,7 @@ c3_mission_begin(
     // read orientation
     const float heading = 2.0f*M_PI*f[i].heading/(float)0xffff;
     quat_from_euler(&q, 0, 0, heading);
-    uint32_t eid = sx_world_add_entity(objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i));
+    uint32_t eid = sx_world_add_entity(0, objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i));
     // found start position:
     if(!strcmp(sx.assets.object[objectid].filename, "startpos"))
       startposid = eid;
@@ -73,7 +74,7 @@ c3_mission_begin(
   float *pos = sx.world.entity[startposid].body.c;
   q = sx.world.entity[startposid].body.q;
   // add player entity and attach camera and movement controller:
-  uint32_t eid = sx_world_add_entity(player_objectid, pos, &q,
+  uint32_t eid = sx_world_add_entity(0, player_objectid, pos, &q,
       sx.world.entity[startposid].id, sx.world.entity[startposid].camp);
 
   // setup start position:
@@ -106,25 +107,32 @@ void
 c3_mission_pump_events(
     c3_mission_t *mis)
 {
-  // TODO: put this in some gamestate switch, too:
+  static int old_gamestate = C3_GAMESTATE_PAD;
+
   if(!Mix_PlayingMusic())
+    sx_music_play(sx.assets.fmusic[sx.mission.gamestate], 100);
+
+  if(sx.mission.gamestate != old_gamestate)
   {
-    char filename[32];
-    c3_triggers_parse_music(filename, mis->music, mis->gamestate, 'f');
-    sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), -1);
+    // repeat a ton of times
+    sx_music_play(sx.assets.fmusic[sx.mission.gamestate], 100);
+    old_gamestate = sx.mission.gamestate;
+    if(sx.mission.gamestate == C3_GAMESTATE_LOSE)
+    {
+      sx.world.status_message = "mission lost, press fire to restart";
+      sx.cam.mode = s_cam_rotate;
+    }
+    if(sx.mission.gamestate == C3_GAMESTATE_WIN)
+    {
+      sx.world.status_message = "mission goal accomplished! press 'E' to end";
+      Mix_VolumeMusic(MIX_MAX_VOLUME);
+    }
   }
-  sx_entity_t *P = sx.world.entity + sx.world.player_entity;
-  const float *player_pos = P->body.c;
-  const int gid = 0;
-  float wp[] = {
-    sx.world.group[gid].waypoint[P->curr_wp][0] - player_pos[0],
-    0.0f,
-    sx.world.group[gid].waypoint[P->curr_wp][1] - player_pos[2]};
-  if(dot(wp, wp) < 200.0f*200.0f && P->curr_wp <= 10)
-    P->curr_wp++;
+
+  if(sx.time > 1000.0)
+    old_gamestate = mis->gamestate = C3_GAMESTATE_FLIGHT; // switching from pad -> flight can wait until finished
 
   c3_triggers_check(mis);
-  P->prev_wp = P->curr_wp;
   mis->time ++;
   //if(mis->counter > 0)
     mis->counter ++;
@@ -213,12 +221,7 @@ c3_mission_load(
 
   if(file_readline(f, line)) return 1;
   mis->music = line[0];
-  char filename[16];
-  for(int i = 0; i < C3_GAMESTATE_SIZE; i++)
-  {
-    c3_triggers_parse_music(filename, mis->music, i ,'f');
-    sx_assets_load_music(&sx.assets, filename);
-  }
+  sx_assets_load_music(&sx.assets, mis->music, 'f');
   if(file_readline(f, line)) return 1;
   sscanf(line, "%d", &mis->mission_type);
   if(file_readline(f, line)) return 1;
@@ -300,7 +303,9 @@ c3_mission_load(
   mis->time = 0;
   mis->counter = 0;
 
-  // XXX TODO: we still need to load .ord .inf for briefing
+  // XXX TODO: we still need to load .ord for briefing
+
+  c3_inf_parse(mis);
 
   // load global sounds
   mis->snd_engine      = sx_assets_load_sound(&sx.assets, "inside.wav");
@@ -328,6 +333,6 @@ c3_mission_load(
   mis->obj_dead_coma      = sx_assets_load_object(&sx.assets, "deadcoma", 1);
   mis->obj_dead_copt      = sx_assets_load_object(&sx.assets, "deadcopt", 1);
 
-  // it follows: triggers (see triggers.h)
-  return c3_triggers_parse(mis, f);
+  c3_triggers_parse(mis, f); // returns number of parsed triggers
+  return 0;
 }

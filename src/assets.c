@@ -27,34 +27,24 @@ sx_assets_load_sound(
 uint32_t
 sx_assets_load_music(
     sx_assets_t *a,
-    const char *filename)
+    const char variant,
+    const char fg)
 {
-  for(int k=0;k<a->num_music;k++)
-    if(!strcmp(a->fmusic[k]->filename, filename))
-      return k;
-  assert(a->num_music < C3_GAMESTATE_SIZE);
-  if(sx_music_init(sx_assets_filename_to_music(a, filename), filename))
-		  return -1;
-  return a->num_music++;
-}
-
-sx_music_t* sx_assets_filename_to_music(sx_assets_t* a, const char* filename)
-{
-  // find gamestate i corresponding to filename
-  int i = C3_GAMESTATE_FLIGHT;
-  if(!strncmp(filename+1, "win", 3)) i = C3_GAMESTATE_WIN;
-  else if(!strncmp(filename+1, "lose", 4)) i = C3_GAMESTATE_WIN;
-  else if(!strncmp(filename+2, "lwin", 3)) i = C3_GAMESTATE_WIN;
-  else if(!strncmp(filename+2, "dire", 4)) i = C3_GAMESTATE_DIRE;
-  else if(!strncmp(filename+2, "flight", 6)) i = C3_GAMESTATE_FLIGHT;
-  else if(!strncmp(filename+2, "lwin", 4)) i = C3_GAMESTATE_LOSE_WIN;
-  else if(!strncmp(filename+2, "combat", 6)) i = C3_GAMESTATE_COMBAT;
-  else if(!strncmp(filename+2, "pad", 3)) i = C3_GAMESTATE_PAD;
-  else if(!strncmp(filename+2, "scary", 3)) i = C3_GAMESTATE_SCARY;
-
-  if(filename[0] == 'f')
-    return a->fmusic[i];
-  return a->gmusic[i];
+  char filename[256];
+  for(int i=0;i<C3_GAMESTATE_SIZE;i++)
+  {
+    if(i == C3_GAMESTATE_WIN || i == C3_GAMESTATE_LOSE )
+      snprintf(filename, 256, "%c%s", fg, c3_condition_midi_text[i]);
+    else
+      snprintf(filename, 256, "%c%c%s", fg, variant, c3_condition_midi_text[i]);
+    if(sx_music_init(a->fmusic[i], filename))
+    {
+      fprintf(stderr, "[music] failed to load %s\n", filename);
+      return 1;
+    }
+  }
+  a->num_music = C3_GAMESTATE_SIZE;
+  return 0;
 }
 
 uint32_t

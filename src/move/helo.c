@@ -236,9 +236,10 @@ sx_move_helo_damage(
     // TODO: this sucks and needs replacement. do velocity and if rotor touched etc.
     // TODO: at the very least see whether we hit ground upside down
     float impulse = sqrtf(dot(e->body.pv, e->body.pv));
-    if(impulse > 15000.0) // impulse in meters/second * kg
+    // if(dt < 0.5 && impulse > 15000.0) // impulse in meters/second * kg
     {
       // TODO: more selective damage
+      // if(dt > 0.5 && e->stat.gear == 1)// can't do that with current AI.
       if(e->stat.gear == 1)
       {
         if(impulse > 100000.0)
@@ -247,11 +248,11 @@ sx_move_helo_damage(
           new_hitpoints -= 20; // TODO: damage gear
         }
       }
-      else
+      else if(impulse > 1000.0)
       {
         sx_sound_play(sx.assets.sound + sx.mission.snd_scrape, -1);
         new_hitpoints -= 5;
-        if(impulse > 50000.0)
+        if(dt < 0.2 || impulse > 50000.0)
           new_hitpoints -= 100;
       }
     }
@@ -259,6 +260,7 @@ sx_move_helo_damage(
   else // if (!collider)
     if(collider->parent != e) // rockets don't explode on owner
   {
+    if(e->hitpoints <= 0) return; // no need to precisely intersect dead things
     // call into the move routines to obtain list of collidable obb with
     // sx_part_type_t description what it is
     sx_obb_t obb[3];
@@ -288,26 +290,22 @@ sx_move_helo_damage(
           sx_spawn_explosion(e);
           // for(int i=0;i<10;i++) sx_spawn_debris(e);
         }
-        fprintf(stderr, "[coll] %s's part %d hit by %s's %s\n",
+        fprintf(stderr, "[coll] %s's part %d hit by %s's %s hitp %g\n",
              sx.assets.object[e->objectid].filename,
              pt[p],
              (!parent || parent->objectid == -1u) ? "(died)" :
              sx.assets.object[parent->objectid].filename,
-             sx.assets.object[collider->objectid].filename);
+             sx.assets.object[collider->objectid].filename,
+             new_hitpoints);
       }
     }
   }
   if(e-sx.world.entity == sx.world.player_entity &&
      new_hitpoints <= 0.0 && e->hitpoints > 0.0)
   { // player died
-    // TODO: lose trigger
     sx_sound_play(sx.assets.sound + sx.mission.snd_explode, -1);
-    sx.cam.mode = s_cam_rotate;
     sx.mission.gamestate = C3_GAMESTATE_LOSE;
     sx_sound_loop(sx.assets.sound+sx.mission.snd_fire, 5, 1000);
-    char filename[32];
-    c3_triggers_parse_music(filename, sx.mission.music, C3_GAMESTATE_LOSE, 'f');
-    sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), -1);
     uint32_t eid = sx_spawn_fire(e);
     quat_t q, p;
     quat_init_angle(&q, M_PI/2.0, 0, 1, 0);
@@ -320,6 +318,9 @@ sx_move_helo_damage(
 void
 sx_move_helo_think(sx_entity_t *e)
 {
+  if(e->hitpoints <= 0.0f) return; // dead.
+
+  // apply controls:
   if(e->ctl.trigger_gear > 0 && e->stat.gear < 1.0f)
     e->stat.gear += 1.0f/128.0f;
   if(e->ctl.trigger_gear < 0 && e->stat.gear > 0.0f)
@@ -330,10 +331,45 @@ sx_move_helo_think(sx_entity_t *e)
   if(e->ctl.trigger_bay < 0 && e->stat.bay > 0.0f)
     e->stat.bay -= 1.0f/128.0f;
 
+  if(e->ctl.trigger_fire)
+  { // fire trigger pulled
+    if(e->stat.bay >= 1.0f)
+    { // bay is open!
+      if(sx.time - e->fire_time >= 300.0f)
+      { // also weapons are ready
+        uint32_t eid = sx_spawn_rocket(e);
+        uint32_t oid = e->objectid;
+        e->fire_time = sx.time;
+        if(oid != -1u)
+        {
+          uint32_t offi[3];
+          int cnt = e->plot.weapons(offi, 3);
+          if(cnt >= 3)
+          {
+            e->side = (e->side+1) & 1;
+            int w = 1 + e->side; // alternate between rockets
+            float off[] = {
+              sx.assets.object[oid].geo_off[0][3*offi[w]+0] - e->cmm[0],
+              sx.assets.object[oid].geo_off[0][3*offi[w]+1] - e->cmm[1],
+              sx.assets.object[oid].geo_off[0][3*offi[w]+2] - e->cmm[2]};
+            // fprintf(stderr, "off %d,%d -- %g %g %g\n", w, offi[w], off[0], off[1], off[2]);
+            quat_transform(&e->body.q, off);
+            for(int k=0;k<3;k++)
+              sx.world.entity[eid].body.c[k] += off[k];
+          }
+        }
+        e->ctl.trigger_fire = 0;
+      } // else not ready, bad luck, try again next time
+    }
+    else
+    { // open bay and wait
+      e->ctl.trigger_bay = 1;
+    }
+  }
+
   e->stat.alt_above_ground = sx_helo_alt_above_ground(e);
 
-#if 1
-  // autopilot.
+  // set new controls: autopilot.
   float wp_dist = 0.0f;
   int cruise_mode = 0;
   if(e-sx.world.entity != sx.world.player_entity)
@@ -341,19 +377,93 @@ sx_move_helo_think(sx_entity_t *e)
     e->ctl.autopilot_alt = 1;
     e->ctl.autopilot_alt_target = 30.0f;
     e->ctl.autopilot_vel = 1;
+    e->ctl.autopilot_rot = 1;
   }
-    // aim for next waypoint
-    float d[3];
-    int gid = e->id - 'A'; // = 0 XXX everybody gather at player's waypoints!
+
+  // aim for next waypoint
+  float d[3];
+
+  for(int t=0;t<2;t++)
+  {
+    int gid = e->curr_wpg - 'A';
+    if(e-sx.world.entity == sx.world.player_entity) gid = 0;
     d[0] = sx.world.group[gid].waypoint[e->curr_wp][0] - e->body.c[0];
     d[2] = sx.world.group[gid].waypoint[e->curr_wp][1] - e->body.c[2];
     d[1] = 0.0f;
+#if 0 // everybody go at player!
+    d[0] = sx.world.entity[sx.world.player_entity].body.c[0] - e->body.c[0];
+    d[2] = sx.world.entity[sx.world.player_entity].body.c[2] - e->body.c[2];
+    d[1] = 0.0f;
+#endif
+    // TODO: if anyone too close (from our group?) keep some distance!
+
     for(int k=0;k<3;k++)
       e->ctl.autopilot_vel_target[k] = d[k];
     wp_dist = sqrtf(dot(d, d));
-    if(wp_dist > 10.0f) cruise_mode = 1;
-    for(int k=0;k<3;k++) d[k] /= wp_dist;
-  // }
+    if(wp_dist < 50.0f)
+    {
+      e->prev_wp = e->curr_wp;
+      e->curr_wp++;
+      if(e->curr_wp >= sx.world.group[gid].num_waypoints) e->curr_wp = 0; // restart
+      // fprintf(stderr, "\n[XXX] group %c switching to waypoint %d\n", e->id, e->curr_wp+1);
+    }
+    else break;
+  }
+
+  // TODO: factor these out into enemy behaviour header
+  if(e-sx.world.entity != sx.world.player_entity)
+  {
+    // collision avoidance:
+    int gid = e->id - 'A';
+    for(int m=0;m<sx.world.group[gid].num_members;m++)
+    {
+      sx_entity_t *o = sx.world.group[gid].member[m];
+      if(e == o) continue;
+      float dist[3] = {
+        o->body.c[0] - e->body.c[0],
+        o->body.c[1] - e->body.c[1],
+        o->body.c[2] - e->body.c[2]};
+      if(sqrt(dot(dist,dist)) < 200.0f && (dot(dist, o->body.v) < 0 || dot(dist, e->body.v) > 0))
+      {
+        // fprintf(stderr, "\n[XXX] group %c fleeing!\n", e->id);
+        // aargh we need to flee!
+        d[0] -= 100*dist[0];
+        d[2] -= 100*dist[2];
+        break;
+      }
+    }
+
+    // attack player
+    if(e->camp == 1) // TODO: if camp==2 search for camp==1 people
+    {
+      sx_entity_t *P = sx.world.entity + sx.world.player_entity;
+      float dist[3] = {
+        P->body.c[0] - e->body.c[0],
+        P->body.c[1] - e->body.c[1],
+        P->body.c[2] - e->body.c[2]};
+      // within radar range? TODO: check if gear or bay out, detect later then!
+      float factor = 1.0f;
+      factor += P->stat.gear * 0.5 + P->stat.bay * 0.5;
+      float len = sqrt(dot(dist,dist));
+      if(len < 300.0f * factor)
+      {
+        // fprintf(stderr, "\n[XXX] group %c attacking player!\n", e->id);
+        e->engaged = sx.world.player_entity;
+        d[0] = dist[0];
+        d[1] = 0.0f;
+        d[2] = dist[2];
+
+        // also shoot at them!
+        float fwd[] = {0, 0, 1};
+        quat_transform(&e->body.q, fwd);
+        if(dot(fwd, dist)/len > 0.9)
+          e->ctl.trigger_fire = 1;
+      }
+    }
+  }
+
+  wp_dist = sqrtf(dot(d, d));
+  for(int k=0;k<3;k++) d[k] /= wp_dist;
 
   // keep same altitude above ground level
   if(e->ctl.autopilot_alt)
@@ -392,9 +502,9 @@ sx_move_helo_think(sx_entity_t *e)
     quat_transform(&e->body.q, rgt);
 
     // panic mode:
-    if(abs(fwd[1]) > 0.3 || abs(rgt[1]) > 0.3 ||
-        dot(e->body.v, e->body.v) > 400 || 
-        dot(e->body.w, e->body.w) > 400)
+    // if(abs(fwd[1]) > 0.3 || abs(rgt[1]) > 0.3 ||
+    //     dot(e->body.v, e->body.v) > 400 || 
+    //     dot(e->body.w, e->body.w) > 400)
     {
       cruise_mode = 0;
       e->ctl.autopilot_vel_guess[0] = 0;
@@ -404,7 +514,7 @@ sx_move_helo_think(sx_entity_t *e)
     // cyclic is really like the third derivative or so..
     // unfortunately this will not work in the presence of wind.
     const float *v0 = d;//e->ctl.autopilot_vel_target;
-    const float vel = cruise_mode ? 30.0f : 0.5f;
+    const float vel = CLAMP(0.5f*wp_dist, 0.0f, 30.0f);// cruise_mode ? 30.0f : 0.5f;
     float v0_os[3] = {v0[0]*vel, v0[1]*vel, v0[2]*vel};
     float v_os[3] = {e->body.v[0], e->body.v[1], e->body.v[2]};
     float w_os[3] = {e->body.w[0], e->body.w[1], e->body.w[2]};
@@ -476,8 +586,17 @@ sx_move_helo_think(sx_entity_t *e)
     }
   }
   if(e->ctl.autopilot_rot)
-  {
-    // TODO: auto tail rotor, explicitly
+  { // auto tail rotor, explicitly. re-use velocity target point:
+    float fwd[3] = {0, 0, 1}, to[3] = {d[0], d[1], d[2]};
+    quat_transform(&e->body.q, fwd); // nose in world space
+
+    fwd[1] = to[1] = 0.0f;
+    normalise(fwd); normalise(to);
+    float angle_we = atan2f(-fwd[0], fwd[2]);
+    float angle_to = atan2f(-to [0], to [2]);
+    e->ctl.tail = (angle_to - angle_we) * 1.0f;
+    // dampen:
+    e->ctl.tail += 3.f * e->body.w[1];
   }
 
   // sanitise all values
@@ -485,7 +604,6 @@ sx_move_helo_think(sx_entity_t *e)
   e->ctl.cyclic[0]  = CLAMP(e->ctl.cyclic[0], -1.0f, 1.0f);
   e->ctl.cyclic[1]  = CLAMP(e->ctl.cyclic[1], -1.0f, 1.0f);
   e->ctl.tail       = CLAMP(e->ctl.tail,      -1.0f, 1.0f);
-#endif
 }
 
 // TODO: put in some physics boilerplate thing

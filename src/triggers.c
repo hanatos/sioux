@@ -23,11 +23,6 @@ c3_triggers_identifier_to_int(
     return sx_assets_load_sound(&sx.assets, id);
   }
 
-  if(len > 4 && !strncmp(id+len-4, ".mid", 4))
-  {
-    return sx_assets_load_music(&sx.assets, id);
-  }
-
   return atol(id); // parse integer number for everything else
 }
 
@@ -38,20 +33,22 @@ c3_triggers_int_to_pos(uint32_t id, float *pos)
   if(id > 0xff)
   { // two char identifier
     char c0 = id&0xff, c1 = id >> 8;
-    if(c0 == 'W' || c0 == 'J')
+    // W might be waypoint of second byte, i.e. WL waypoint of hind in c1m3
+    // but there's also use of WO as the location of some tanks 'O', they don't have waypoints.
+    // without further ideas, let's use the coordinate of an alive or dead object of that group.
+    // prefer life objects.
+    if(c0 == 'W')
     { // coordinates of some object
-      // TODO: need to find shortest/largest distance here? this just returns the first of the group we find
-      // TODO: use some smarter way of doing this:
-      for(int i=0;i<sx.world.num_entities;i++)
+      int gid = c1 - 'A';
+      for(int m=0;m<sx.world.group[gid].num_members;m++)
       {
-        if(sx.world.entity[i].id == c1)
-        {
-          for(int k=0;k<3;k++)
-            pos[k] = sx.world.entity[i].body.c[k];
-          return;
-        }
+        for(int k=0;k<3;k++)
+          pos[k] = sx.world.group[gid].member[m]->body.c[k];
+        if(sx.world.group[gid].member[m]->hitpoints > 0) return;
       }
+      return;
     }
+    // regular waypoing id, such as A1 or J3
     int wp = c0-'A', wpn = c1-'1';
     if(wp < 20 && wpn <= 10)
     {
@@ -161,12 +158,9 @@ c3_triggers_action(
     uint32_t      arg0,
     uint32_t      arg1)
 {
-  char filename[32];
   // TODO
   switch(a)
   {
-    case C3_ACT_TEXT:
-      break;
     case C3_ACT_FLASH:
       sx_hud_flash(&sx.vid.hud, arg0, arg1);
       triggers_printf(stderr, "flashing control %u for %u seconds\n", arg0, arg1);
@@ -179,10 +173,22 @@ c3_triggers_action(
       break;
     case C3_ACT_VAPORIZE:     // vaporize, <object> ???
       break;
+    case C3_ACT_TEXT:
+      triggers_printf(stderr, "action display text %u\n\"\"\"%s\"\"\"\n", arg0, mis->radiomessage[arg0]);
+      sx.world.status_message = mis->radiomessage[arg0];
+      break;
+    case C3_ACT_ROUTE:
+      triggers_printf(stderr, "action route %c %c%u\n", arg0, arg1>>8, (arg1&0xff) + 1);
+      for(int m=0;m<sx.world.group[arg0-'A'].num_members;m++)
+      {
+        int wpg = (arg1>>8);
+        int wpn = (arg1&0xff)-1;
+        sx.world.group[arg0-'A'].member[m]->curr_wpg = wpg;
+        sx.world.group[arg0-'A'].member[m]->curr_wp  = wpn;
+      }
+      break;
     case C3_ACT_WIN:          // mission won
-      // TODO: set gamestate and let world/mission do it's thing
-      c3_triggers_parse_music(filename, mis->music, C3_GAMESTATE_WIN, 'f');
-      sx_music_play(sx_assets_filename_to_music(&sx.assets, filename), -1);
+      sx.mission.gamestate = C3_GAMESTATE_WIN;
       break;
     case C3_ACT_CLEARCOUNTER: // restart from 1
       triggers_printf(stderr, "resetting counter\n");
@@ -222,15 +228,28 @@ c3_triggers_check_cond(
         // triggers_printf(stderr, "distance to waypoint %c%c : %g\n", arg1&0xff, arg1>>8, sqrtf(dot(pos,pos)/2.0f));
         return sqrtf(dot(pos,pos)) > ft2m(2*arg0);
       }
+    case C3_COND_INTACT:      // intact, <object>
+      if(arg0 == 'P') return P->hitpoints > 0.0;
+      for(int m=0;m<sx.world.group[arg0-'A'].num_members;m++)
+        if(sx.world.group[arg0-'A'].member[m]->hitpoints <= 0) return 0;
+      return 1;
     case C3_COND_ALIVE:      // alive, <object>
       if(arg0 == 'P') return P->hitpoints > 0.0;
+      for(int m=0;m<sx.world.group[arg0-'A'].num_members;m++)
+        if(sx.world.group[arg0-'A'].member[m]->hitpoints > 0) return 1;
       return 0;
     case C3_COND_KILLED:     // killed, <object>, <num>
-      return 0;
+      {
+        int dead = 0;
+        for(int m=0;m<sx.world.group[arg0-'A'].num_members;m++)
+          if(sx.world.group[arg0-'A'].member[m]->hitpoints <= 0) dead++;
+        return dead >= arg1;
+      }
     case C3_COND_DESTROYED:
       if(arg0 == 'P') return P->hitpoints <= 0.0;
-      // TODO: check other ids
-      return 0;
+      for(int m=0;m<sx.world.group[arg0-'A'].num_members;m++)
+        if(sx.world.group[arg0-'A'].member[m]->hitpoints > 0) return 0;
+      return 1;
     case C3_COND_BELOW:      // below, <altitude>
       // triggers_printf(stderr, "checking below %g %u\n",
       //    m2ft(sx_heli_alt_above_ground(sx.world.player_move)), arg0);
@@ -247,10 +266,15 @@ c3_triggers_check_cond(
       if(arg0 == 'P') return ((arg1&0xff)=='A') &&
         ((arg1>>8)=='1' + P->curr_wp-1) &&
          (P->prev_wp != P->curr_wp);
+      // TODO:
+      // sx.world.group[arg0-'A'].members[m].curr_wp and curr_wpg ... but what happens if only one reaches the point?
       return 0;
     case C3_COND_DAMAGE:     // damage, <num>
       // TODO: return if hitpoints >= num
       return 1;
+    case C3_COND_ENCOUNTER:
+      if(arg0 == 'P' && P->engaged != -1u) return sx.world.entity[P->engaged].id == arg1;
+      return 0;
     case C3_COND_FACES:      // faces, <object/waypoint id>  // maybe looking at it?
       return 0;
     case C3_COND_WEAPON:
@@ -322,30 +346,6 @@ c3_triggers_check(
     if(mis->trigger[t].enabled)
       c3_triggers_check_one(mis, mis->trigger+t), enabled++;
   // triggers_printf(stderr, "ran %d/%d triggers\n", enabled, mis->num_triggers);
-}
-
-char* c3_triggers_parse_music(char* filename, char letter, int gamestate, char fg)
-{
-  int i = 0;
-
-  memset(filename, '\0', strlen(filename));
-
-  fg = tolower(fg);
-
-  if(isalpha(fg) != 0 && ( fg == 'f' || fg == 'g' ))
-    filename[i++] = fg;
-
-  if(gamestate != C3_GAMESTATE_LOSE && gamestate != C3_GAMESTATE_WIN)
-  { // losing or winning has no variant
-    if(isalpha(letter) != 0)
-      filename[i++] = tolower(letter);
-    else if(isdigit(letter) != 0 && letter != 0)
-      filename[i++] = 'n';
-  }
-
-  strncpy(&filename[i], c3_condition_midi_text[gamestate], 11);
-
-  return filename;
 }
 
 

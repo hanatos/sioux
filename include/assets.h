@@ -34,7 +34,7 @@ uint32_t sx_assets_load_sound(
 
 uint32_t sx_assets_load_music(
     sx_assets_t *a,
-    const char *filename);
+    char variant, char gf);
 
 sx_music_t* sx_assets_filename_to_music(
     sx_assets_t* a,

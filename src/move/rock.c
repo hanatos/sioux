@@ -8,7 +8,8 @@
 
 typedef struct sx_move_rock_t
 {
-  int fuel;
+  int last_trail;
+  int fire_time;
   float last_p[3];
 }
 sx_move_rock_t;
@@ -17,21 +18,22 @@ void
 sx_move_rock_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
 {
   sx_move_rock_t *r = e->move_data;
-  const int m = 100.0f + 10.0f*r->fuel;
+  const int m = 6.2f;
   sx_actuator_t grav = { // gravity
     .f = {0.0f, -9.81f * m, 0.0f},
     .r = {0.0f, 0.0f, 0.0f},
   };
   sx_rigid_body_apply_force(b, &grav);
-  if(r->fuel > 0)
+  if(sx.time - r->fire_time < 1100.0f)
   { // thrust of rocket booster
-    float c = 80000.0f;
+    float c = 981.0f; // 100 g thrust
     sx_actuator_t thrust = {
       .f = {0.0f, 0.0f, c},
       .r = {0.0f, 0.0f, 0.0f},
     };
     quat_transform(&b->q, thrust.f);
     sx_rigid_body_apply_force(b, &thrust);
+#if 0 // seeking a bit, but doesn't work well
     if(e->parent && e->parent->engaged != -1u)
     {
       float d[] = {
@@ -48,6 +50,7 @@ sx_move_rock_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
       };
       sx_rigid_body_apply_force(b, &steer);
     }
+#endif
   }
 }
 
@@ -78,13 +81,18 @@ sx_move_rock_think(sx_entity_t *e)
 {
   sx_move_rock_t *r = e->move_data;
   // run out of fuel after a while and then fall down and explode later
-  if(r->fuel > 0) r->fuel--;
-  if((r->fuel & 7) == 7)
+  // got fuel for 1.1 seconds, that should bring us about 8km far.
+  // let's have it smoke trail for some longer though:
+  if(sx.time - r->fire_time < 3000.0f)
   {
-    if(r->last_p[0] != -1.0)
-      sx_spawn_trail(e, r->last_p);
-    for(int k=0;k<3;k++)
-      r->last_p[k] = e->body.c[k];
+    if(sx.time - r->last_trail > 200.0f)
+    {
+      if(r->last_p[0] != -1.0)
+        sx_spawn_trail(e, r->last_p);
+      for(int k=0;k<3;k++)
+        r->last_p[k] = e->body.c[k];
+      r->last_trail = sx.time;
+    }
   }
 }
 
@@ -92,8 +100,19 @@ void
 sx_move_rock_init(sx_entity_t *e)
 {
   sx_move_rock_t *r = malloc(sizeof(*r));
-  r->fuel = 200;
+  r->last_trail = sx.time;
+  r->fire_time = sx.time;
   for(int k=0;k<3;k++) r->last_p[k] = -1.0;
   e->move_data = r;
+  // these are hydra 70, come out at 6.2 kg, 700m/s, 8000-10000m range.
+  float w = 0.07f, h = 0.07f, l = 1.060f;
+  float rho = 1193.7f;
+  const float mass = rho * w * h * l;
+  e->body.m = mass;
+  e->body.invI[0] = 3.0f/8.0f / (rho * w * (h * l*l*l + l * h*h*h));
+  e->body.invI[4] = 3.0f/8.0f / (rho * h * (w * l*l*l + l * w*w*w));
+  e->body.invI[8] = 3.0f/8.0f / (rho * l * (w * h*h*h + h * w*w*w));
+  // this rocket propells itself, it doesn't take on the parent's angular moments:
+  for(int k=0;k<3;k++) e->body.pw[k] = 0.0f;
 }
 

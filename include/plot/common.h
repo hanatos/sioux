@@ -15,6 +15,7 @@ PLOT_DO(wolf)
 
 #define PLOT_DO(A)\
 void sx_plot_ ## A (uint32_t ei);\
+int  sx_plot_ ## A ## _weapons(uint32_t *ind, int max_ind);\
 int  sx_plot_ ## A ## _collide(const sx_entity_t *e, sx_obb_t *box, sx_part_type_t *pt);
 
 PLOT_LIST
@@ -29,6 +30,7 @@ sx_plot_init(sx_entity_t *e)
     e->plot = (sx_plot_t){\
       .id      = #A,\
       .plot    = sx_plot_ ## A ,\
+      .weapons = sx_plot_ ## A ## _weapons,\
       .collide = sx_plot_ ## A ## _collide,\
     };\
     return;\

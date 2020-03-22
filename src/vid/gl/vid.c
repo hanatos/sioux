@@ -1009,7 +1009,8 @@ void sx_vid_render_frame_rect()
       sx_vid_compute_mvp(MVP, MV, -1, &mq, mp, &sx.cam, 0, 0);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
-      sx_vid_compute_mvp(MVPO, MV, -1, &mq, mp, &sx.cam, 1, 0);
+      float mpo[] = {sx.cam.prev_x[0], sx.cam.prev_x[1], sx.cam.prev_x[2]};
+      sx_vid_compute_mvp(MVPO, MV, -1, &mq, mpo, &sx.cam, 1, 0);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp_old"), 1, GL_TRUE, MVPO);
       // glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
@@ -1075,18 +1076,15 @@ void sx_vid_render_frame_rect()
     {
       sx_entity_t *ent = sx.world.entity + e;
       if(e == 0) ent = sx.world.entity + sx.world.player_entity;
-      if(ent->objectid != -1u && ent->camp == 1)// && sx.assets.object[ent->objectid].collidable)
+      if(e == 0 || ent->objectid != -1u)// && ent->camp == 0))// && sx.assets.object[ent->objectid].collidable)
       {
         sx_part_type_t pt[10];
         sx_obb_t obb[10];
-        int cnt = 0;
+        int cnt = 1;
         if(ent->plot.collide)
           cnt = ent->plot.collide(ent, obb, pt);
         else
-        {
-          cnt = 1;
           sx_obb_get(obb, ent, 0, -1); // get first element, without offset since we don't know any better
-        }
         for(int i=0;i<cnt;i++)
         {
         // now draw 12 lines
@@ -1142,9 +1140,9 @@ void sx_vid_render_frame_rect()
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
       glLineWidth(1.5f*sx.width/1024.0f);
-      glNamedBufferSubData(sx.vid.vbo_debug_line, 0, sizeof(sx.vid.debug_line_vx), sx.vid.debug_line_vx);
+      glNamedBufferSubData(sx.vid.vbo_debug_line, 0, sizeof(sx.vid.debug_line_vx[0])*sx.vid.debug_line_cnt, sx.vid.debug_line_vx);
       glBindVertexArray(sx.vid.vao_debug_line);
-      glDrawArrays(GL_LINES, 0, sx.vid.debug_line_cnt/6);
+      glDrawArrays(GL_LINES, 0, sx.vid.debug_line_cnt/3);
     }
 #endif
 #if 0
@@ -1164,9 +1162,9 @@ void sx_vid_render_frame_rect()
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 
       glLineWidth(1.5f*sx.width/1024.0f);
-      glNamedBufferSubData(sx.vid.vbo_debug_line, 0, sizeof(sx.vid.debug_line_vx), sx.vid.debug_line_vx);
+      glNamedBufferSubData(sx.vid.vbo_debug_line, 0, sizeof(sx.vid.debug_line_vx[0])*sx.vid.debug_line_cnt, sx.vid.debug_line_vx);
       glBindVertexArray(sx.vid.vao_debug_line);
-      glDrawArrays(GL_LINES, 0, sx.vid.debug_line_cnt/6);
+      glDrawArrays(GL_LINES, 0, sx.vid.debug_line_cnt/3);
     }
 #endif
 #endif
@@ -1675,7 +1673,7 @@ static inline void sx_heli_control_engage_target()
     if(dot(x,x) > 800*800) P->engaged = -1u;
   }
   int next = 0;
-  for(int g=0;g<25;g++) // ignore 'Z'
+  for(int g=0;g<26;g++)
   {
     for(int m=0;m<sx.world.group[g].num_members;m++)
     {
@@ -1856,9 +1854,7 @@ int sx_vid_handle_input()
           sx_heli_control_flap(&P->ctl);
           break;
         case SDLK_SPACE:
-          // XXX need generic heli interface here too
           P->ctl.trigger_fire = 1;
-          sx_spawn_rocket(P);
           break;
       }
       break;
@@ -1879,9 +1875,6 @@ int sx_vid_handle_input()
         case SDLK_o:
         case SDLK_u:
           sx_heli_control_tail(&P->ctl, 0);
-          break;
-        case SDLK_SPACE:
-          P->ctl.trigger_fire = 0;
           break;
       }
       break;
@@ -1929,9 +1922,17 @@ int sx_vid_handle_input()
         case 5:
           sx.cam.angle_right = .5+.5f*event.jaxis.value/(float)0x7fff;
           break;
+          // these never trigger on the dualshock, they come in as hat:
+        case 6: // x axis of left cross, right positive
+          break;
+        case 7: // y axis of left cross, down positive
+          // next waypoint:
+          if(event.jaxis.value > 0) P->curr_wp = (P->curr_wp+1) % sx.world.group[0].num_waypoints;
+          break;
 #endif
       }
       break;
+#if 1 // thrustmaster hat, or axis 6 and 7 on the gamepad:
       case SDL_JOYHATMOTION:
       switch(event.jhat.hat)
       {
@@ -1943,19 +1944,25 @@ int sx_vid_handle_input()
           else if(event.jhat.value == SDL_HAT_RIGHT)
             sx.cam.angle_right = 1.0f;
           else if(event.jhat.value == SDL_HAT_UP)
-            sx.cam.angle_down = -1.0f;
+            // sx.cam.angle_down = -1.0f;
+            sx.cam.mode = s_cam_inside_no_cockpit;
           else if(event.jhat.value == SDL_HAT_DOWN)
-            sx.cam.angle_down = 1.0f;
+            // sx.cam.angle_down = 1.0f;
+            // next waypoint:
+            P->curr_wp = (P->curr_wp+1) % sx.world.group[0].num_waypoints;
           break;
       }
       break;
+#endif
       case SDL_JOYBUTTONDOWN:
       switch(event.jbutton.button)
       {
         case 0:
           // XXX need generic heli interface here too
-          P->ctl.trigger_fire = 1;
-          sx_spawn_rocket(P);
+          if(P->hitpoints <= 0)
+            c3_mission_begin(&sx.mission);
+          else
+            P->ctl.trigger_fire = 1;
           break;
         case 1:
           sx_heli_control_engage_target();
@@ -1969,6 +1976,12 @@ int sx_vid_handle_input()
           break;
 #endif
         // dualshock
+        case 2:
+          sx_heli_control_gear(&P->ctl);
+          break;
+        case 3:
+          sx_heli_control_flap(&P->ctl);
+          break;
         case 4:
           collective_trim -= 0.1f;
           sx_heli_control_collective(&P->ctl, collective_trim);

@@ -79,6 +79,18 @@ sx_plot_coma_collide(
   return 3;
 }
 
+int
+sx_plot_coma_weapons(
+    uint32_t *ind,
+    int max_ind)
+{
+  assert(max_ind >= 3);
+  ind[0] = 12; // gattling gun
+  ind[1] = 15; // rockets 1
+  ind[2] = 16; // rockets 2
+  return 3;
+}
+
 void
 sx_plot_coma(uint32_t ei)
 {

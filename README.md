@@ -55,7 +55,8 @@ $ ./sx
 
 you can also pass ```--fullscreen``` and play with ```--lod 1``` (1 is highest,
 4 is default, higher will be lower detail). if you want to start another
-mission, try ```./sx c1m3.mis``` or similar.
+mission, try ```./sx c1m3.mis``` or similar. in fact c1m3 is probably the only mission
+yet which you can play about as intended and actually win :)
 
 For ```SDL2_mixer``` to work with fluidsynth you need to set ```SDL_SOUNDFONTS```:
 
@@ -68,6 +69,10 @@ $ export SDL_SOUNDFONTS=<path to soundfonts directory>/<soundfont filename>
 keyboard bindings are
 
 ![](doc/keymap.svg)
+
+or, if you have a dual shock 4 controller:
+
+![](doc/gamepad.svg)
 
 and you may want to read [the helicopter flying handbook](https://www.faa.gov/regulations_policies/handbooks_manuals/aviation/helicopter_flying_handbook/).
 
@@ -85,7 +90,7 @@ not playable. in particular:
 
 * i implemented some of the trigger-based scripting system but it's by no means complete
 
-* no enemy ai, like, at all
+* enemy ai makes them not crash immediately (hey, flying helicopters is hard!) but they're really dumb
 
 * loaded the scene and all objects and their textures, but only very few
 are animated
@@ -97,6 +102,8 @@ are animated
 * shading (currently it's just pretty much displaying the texture colour and normal)
 
 * global illumination, or some close fake
+
+* horizon maps or ray tracing for terrain shadows and radar/stealth
 
 * simulate weather and winds in the terrain (maybe i'll settle for incompressible fluids here)
 

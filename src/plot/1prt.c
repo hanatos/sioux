@@ -1,7 +1,14 @@
 #include "plot/common.h"
+#include "physics/obb_obb.h"
 
 int
 sx_plot_1prt_collide(const sx_entity_t *e, sx_obb_t *box, sx_part_type_t *pt)
+{
+  sx_obb_get(box, e, 0, -1); // first element without offset
+  return 1;
+}
+
+int sx_plot_1prt_weapons(uint32_t *ind, int max_ind)
 {
   return 0;
 }

@@ -350,6 +350,7 @@ sx_world_remove_entity(
 
 uint32_t
 sx_world_add_entity(
+    sx_entity_t *parent, // optional parent entity for positioning
     uint32_t objectid,   // 3d model to link to
     const float *p,      // position
     const quat_t *q,     // orientation
@@ -384,6 +385,10 @@ sx_world_add_entity(
   sx.world.entity[eid].camp = camp;
   sx.world.entity[eid].hitpoints = sx.assets.object[objectid].hitpoints;
   sx.world.entity[eid].birth_time = sx.time;
+  sx.world.entity[eid].fire_time = sx.time;
+  sx.world.entity[eid].side = 0;
+  sx.world.entity[eid].curr_wpg = (id == 'P' || id == 'W') ? 'A' : id;
+  sx.world.entity[eid].prev_wpg = (id == 'P' || id == 'W') ? 'A' : id;
 
   // init location and orientation
   for(int k=0;k<3;k++) sx.world.entity[eid].prev_x[k] = p[k];
@@ -413,29 +418,21 @@ sx_world_add_entity(
     }
   }
 
-  // TODO: move this into move default init:
-  //----
-  const float rho = 50.0f; // mass density
-
-  // derived quantities:
-  // TODO: this the good bounding box?
-  // const float *aabb = sx.assets.object[objectid].geo_aabb[0]; // just the body
-  const float w = 2.0f, l = 2.0f, h = 3.0f; // [m]
-
-  // fprintf(stderr, "%s aabb w h l %g x %g x %g m\n",
-  //     sx.assets.object[objectid].filename,
-  //     w, h, l);
-
-  // init inertia tensor
-  //                | y^2 + z^2  -xy         -xz        |
-  // I = int rho dV |-xy          x^2 + z^2  -xz        |
-  //                |-xz         -yz          y^2 + x^2 |
-  const float mass = rho * w * h * l;
-  sx.world.entity[eid].body.m = mass;
-  sx.world.entity[eid].body.invI[0] = 3.0f/8.0f / (rho * w * (h * l*l*l + l * h*h*h));
-  sx.world.entity[eid].body.invI[4] = 3.0f/8.0f / (rho * h * (w * l*l*l + l * w*w*w));
-  sx.world.entity[eid].body.invI[8] = 3.0f/8.0f / (rho * l * (w * h*h*h + h * w*w*w));
-  //----
+  if(parent)
+  {
+    // in fact don't ground:
+    for(int k=0;k<3;k++) sx.world.entity[eid].prev_x[k] = parent->prev_x[k];
+    sx.world.entity[eid].prev_q = parent->prev_q;
+    for(int k=0;k<3;k++) sx.world.entity[eid].body.c[k] = parent->body.c[k];
+    sx.world.entity[eid].body.q = parent->body.q;
+    float mr = sx.world.entity[eid].body.m / parent->body.m;
+    // init dependent entity's moments
+    for(int k=0;k<3;k++)
+      sx.world.entity[eid].body.pv[k] = parent->body.pv[k] * mr;
+    for(int k=0;k<3;k++)
+      sx.world.entity[eid].body.pw[k] = parent->body.pw[k] * mr;
+    sx.world.entity[eid].parent = parent;
+  }
 
   sx_move_init(sx.world.entity + eid);
   sx_plot_init(sx.world.entity + eid);

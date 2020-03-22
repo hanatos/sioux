@@ -27,6 +27,7 @@ HEADERS=include/assets.h\
         include/c3mission.h\
         include/c3pos.h\
         include/c3jim.h\
+        include/c3inf.h\
         include/c3model.h\
         include/decompress.h\
         include/file.h\
@@ -56,6 +57,7 @@ SX_FILES=src/sx.c\
          src/c3object.c\
          src/hud.c\
          src/physics/grid.c\
+         src/move/common.c\
          src/move/toss.c\
          src/move/helo.c\
          src/move/boom.c\

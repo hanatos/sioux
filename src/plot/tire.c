@@ -14,7 +14,15 @@ sx_plot_tire(uint32_t ei)
 }
 
 int
+sx_plot_tire_weapons(uint32_t *ind, int max_ind)
+{
+  // TODO
+  return 0;
+}
+
+int
 sx_plot_tire_collide(const sx_entity_t *e, sx_obb_t *box, sx_part_type_t *pt)
 {
-  return 0;
+  sx_obb_get(box, e, 0, -1); // first element without offset
+  return 1;
 }

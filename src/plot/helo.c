@@ -16,6 +16,14 @@ sx_plot_helo_collide(
   return 3;
 }
 
+int
+sx_plot_helo_weapons(uint32_t *ind, int max_ind)
+{
+  // TODO
+  return 0;
+}
+
+
 // plot routine "helo" for helicopters, see for instance res/hind.ai.
 void
 sx_plot_helo(uint32_t ei)

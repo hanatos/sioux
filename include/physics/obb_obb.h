@@ -10,10 +10,10 @@ typedef struct sx_obb_t
 sx_obb_t;
 
 static inline void sx_obb_get(
-    sx_obb_t *obb,
+    sx_obb_t *obb,          // will be returned in world space
     const sx_entity_t *e,
-    uint32_t g,
-    uint32_t o)
+    uint32_t g,             // geometry id
+    uint32_t o)             // model offset id
 {
   const uint32_t oi = e->objectid;
   const float *b = sx.assets.object[oi].geo_aabb[g];
@@ -57,13 +57,13 @@ sx_collision_test_plane(
     sx_obb_t *box1,
     sx_obb_t *box2)
 {
-  return fabsf(dot(rpos, n) >
+  return fabsf(dot(rpos, n)) >
       fabsf(dot(box1->x, n)*box1->hsize[0]) +
       fabsf(dot(box1->y, n)*box1->hsize[1]) +
       fabsf(dot(box1->z, n)*box1->hsize[2]) +
       fabsf(dot(box2->x, n)*box2->hsize[0]) +
       fabsf(dot(box2->y, n)*box2->hsize[1]) +
-      fabsf(dot(box2->z, n)*box2->hsize[2]));
+      fabsf(dot(box2->z, n)*box2->hsize[2]);
 }
 
 static inline int

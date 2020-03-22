@@ -26,7 +26,7 @@ int sx_music_init(sx_music_t *m, const char *filename)
 
   m->type = Mix_GetMusicType(m->music);
   strcpy(m->filename, filename);
-  Mix_VolumeMusic(MIX_MAX_VOLUME/3);
+  Mix_VolumeMusic(MIX_MAX_VOLUME);///3);
   return 0;
 }
 
@@ -42,7 +42,7 @@ int sx_music_play(sx_music_t *m, int loops)
   {
     if(Mix_PlayingMusic())
       Mix_HaltMusic();
-    if(Mix_PlayMusic(m->music, loops) == 0)
+    if(Mix_PlayMusic(m->music, loops) == -1)
     {
       fprintf(stderr, "[music] failed to play music file %s!\n", m->filename);
       fprintf(stderr, "[music] reason: %s\n", Mix_GetError());

@@ -79,7 +79,11 @@ void sx_hud_init(sx_hud_t *hud)
   HUD_BEG(s_hud_time)
   snprintf(timestr, sizeof(timestr), "MT %10.3f", sx.time/1000.0f);
   textpos = sx_vid_hud_text(timestr, textpos, 0.77f, -0.98f, 0, 0);
+  // status message
+  if(sx.world.status_message)
+    textpos = sx_vid_hud_text(sx.world.status_message, textpos, 0.0, -0.96f, 1, 1);
   HUD_END(s_hud_time)
+
 
   HUD_BEG(s_hud_radar)
   // find quaternion that only encodes yaw
@@ -91,17 +95,19 @@ void sx_hud_init(sx_hud_t *hud)
   float cx = 0.8, cy = -0.7;
   i += circle(cx, cy, 0.2f, hud->lines+2*i, 50, 0);
   char str[2] = {0};
-  for(int g=0;g<25;g++) // ignore 'Z'
+  for(int g=0;g<26;g++)
   {
+    if(sx.world.group[g].camp == 0) continue; // skip uninited or neutral (trees)
     for(int m=0;m<sx.world.group[g].num_members;m++)
     {
       float x[3] = {sx.world.group[g].member[m]->body.c[0] - c[0], 0.0,
                     sx.world.group[g].member[m]->body.c[2] - c[2]};
       float sc = 0.0003;
       quat_transform_inv(&q1, x);
-      x[0] *= sx.height/(float)sx.width * sc;
+      x[0] *= sc;
       x[2] *= sc;
       if(dot(x, x) > 0.2f*0.2f) continue; // out of range
+      x[0] *= sx.height/(float)sx.width;
       str[0] = g + 'A';
       if(sx.world.group[g].member[m]->hitpoints <= 0.0f) str[0] = 'X';
       textpos = sx_vid_hud_text(str, textpos, cx-x[0], cy+x[2], 1, 1);
@@ -228,55 +234,58 @@ void sx_hud_init(sx_hud_t *hud)
   HUD_END(s_hud_compass)
 
   HUD_BEG(s_hud_waypoint)
-  const int num_wp = sx.world.group[0].num_waypoints;
+  const int gid = entity->curr_wpg-'A'; // 0;
+  const int num_wp = sx.world.group[gid].num_waypoints;
   for(int p=0;p<2;p++)
   {
     uint32_t curr_wp = entity->curr_wp + p;
     if(curr_wp >= num_wp) break;
     float wp[4] = { // waypoint in worldspace
-      sx.world.group[0].waypoint[curr_wp][0],
+      sx.world.group[gid].waypoint[curr_wp][0],
       0.0f,
-      sx.world.group[0].waypoint[curr_wp][1],
+      sx.world.group[gid].waypoint[curr_wp][1],
       1.0f,
     };
     wp[1] = sx_world_get_height(wp);
 
-#if 1
     float MVP[16], MV[16], wph[4] = {0, 0, 0, 1};
     quat_t nop;
     quat_init(&nop, 0, 1, 0, 0);
     sx_vid_compute_mvp(MVP, MV, -1, &nop, wp, &sx.cam, 0, 0);
     mat4_mulv(MVP, wph, wp);
-    if(wp[2] < 0) continue; // discard behind camera
-    for(int k=0;k<3;k++) wp[k] /= wp[3];
-    float x = wp[0];
-    float y = wp[1];
-#else
-    // convert to camera space:
-    for(int k=0;k<3;k++) wp[k] -= sx.cam.x[k];
-    quat_transform_inv(&sx.cam.q, wp);
-    // intersect with spherical coordinates:
-    const float angley = asinf(wp[1] / sqrtf(wp[0]*wp[0] + wp[2]*wp[2]));
-    const float anglex = -atan2f(wp[2], wp[0])+M_PI/2.0f;
-    float x = -2.f * anglex / sx.cam.hfov;
-    float y =  2.f * angley / sx.cam.vfov;
-#endif
-
-    // int i = waypoint_begin;
-    hud->lines[2*i+0] = x;
-    hud->lines[2*i+1] = y;
-    hud->lines[2*i+2] = x;
-    hud->lines[2*i+3] = y+0.20f;
-    i += 2;
-    float cx = x, cy = y+0.25f;
-    char text[3] = {'A', '1', 0};
-    text[1] = '1' + curr_wp;
-    textpos = sx_vid_hud_text(text, textpos, cx, cy, 1, 1);
-    i += circle(cx, cy, 0.05f, hud->lines+2*i, 13, p);
+    if(wp[2] < 0 || fabsf(wp[0]) > fabsf(wp[2]))
+    { // behind camera or out of frustum
+      if(p == 2) continue; // don't draw next
+      if(wp[0] > 0)
+      { // right side
+        i += line(0.96f, 0.96f, 0.98f, 0.94f, hud->lines + 2*i);
+        i += line(0.98f, 0.94f, 0.96f, 0.92f, hud->lines + 2*i);
+      }
+      else
+      { // left side
+        i += line(-0.96f, 0.96f, -0.98f, 0.94f, hud->lines + 2*i);
+        i += line(-0.98f, 0.94f, -0.96f, 0.92f, hud->lines + 2*i);
+      }
+    }
+    else
+    {
+      for(int k=0;k<3;k++) wp[k] /= wp[3];
+      float x = wp[0], y = wp[1];
+      i += line(x, y, x, y+0.2f, hud->lines+2*i);
+      float cx = x, cy = y+0.25f;
+      char text[3] = {'A'+gid, '1', 0};
+      text[1] = '1' + curr_wp;
+      textpos = sx_vid_hud_text(text, textpos, cx, cy, 1, 1);
+      i += circle(cx, cy, 0.05f, hud->lines+2*i, 13, p);
+    }
   }
   HUD_END(s_hud_waypoint)
 
   HUD_BEG(s_hud_center)
+  if(entity->stat.gear == 1.0)
+    textpos = sx_vid_hud_text("gear", textpos, 0.77f, 0.00f, 0, 0);
+  if(entity->stat.bay == 1.0)
+    textpos = sx_vid_hud_text("bay", textpos, 0.77f, -0.05f, 0, 0);
   // where does the nose of the helicopter point to wrt artificial horizon?
   // coordinates are NDC [-1,1]^2
   { // first draw artificial horizon lines by drawing worldspace directions

@@ -8,6 +8,12 @@ sx_plot_glue(uint32_t ei)
 }
 
 int
+sx_plot_glue_weapons(uint32_t *ind, int max_ind)
+{
+  return 0;
+}
+
+int
 sx_plot_glue_collide(const sx_entity_t *e, sx_obb_t *box, sx_part_type_t *pt)
 {
   return 0;
