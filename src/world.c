@@ -67,7 +67,7 @@ sx_world_move_entity(
     float aabb[6] = {0}; // world space aabb
     const int eid = e - sx.world.entity;
     compute_one_aabb(eid, aabb);
-    coll_cnt = sx_grid_query(&sx.world.grid, aabb, coll_ent, coll_cnt);
+    coll_cnt = sx_grid_query(&sx.world.grid, aabb, coll_ent, coll_cnt, -1);
     for(int i=0;i<coll_cnt;i++)
     {
       sx_entity_t *e2 = sx.world.entity+coll_ent[i];

@@ -42,8 +42,7 @@ sx_move_default_damage(sx_entity_t *e, const sx_entity_t *coll, float dmg)
           if(e->objectid < sx.assets.num_objects)
             e->objectid ++;
         }
-        fprintf(stderr, "[coll] ent %zu p %d -- %zu %d\n",
-            e-sx.world.entity, op, coll - sx.world.entity, cp);
+        // fprintf(stderr, "[coll] ent %zu p %d -- %zu %d\n", e-sx.world.entity, op, coll - sx.world.entity, cp);
         fprintf(stderr, "[coll] %s's part %d hit by %s's %d hitp %g\n",
              sx.assets.object[e->objectid].filename,
              our_pt[op],

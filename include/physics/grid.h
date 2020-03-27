@@ -15,6 +15,6 @@ sx_grid_t;
 void sx_grid_init(sx_grid_t *g, int num_el);
 void sx_grid_cleanup(sx_grid_t *g);
 void sx_grid_build(sx_grid_t *g);
-uint32_t sx_grid_query(sx_grid_t *g, float *aabb, uint32_t *collider, uint32_t collider_max);
+uint32_t sx_grid_query(sx_grid_t *g, float *aabb, uint32_t *collider, uint32_t collider_max, uint32_t mask);
 void sx_grid_clear(sx_grid_t *g);
 void sx_grid_add(sx_grid_t *g, const float *aabb, uint32_t eid);

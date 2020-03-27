@@ -1,4 +1,6 @@
 #include "physics/grid.h"
+#include "sx.h"
+#include "world.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -60,6 +62,7 @@ sx_grid_init(sx_grid_t *g, int num_el)
   // alloc list, cnt = 0;
   g->element_max = num_el;
   g->element = malloc(sizeof(g->element[0])*num_el);
+  memset(g->element, 0, sizeof(g->element[0])*num_el);
   g->element_cnt = 0;
 }
 
@@ -107,22 +110,39 @@ dedup(uint32_t *coll, uint32_t cnt)
 }
 
 static inline uint32_t
-query(sx_grid_t *g, uint32_t m, uint32_t *coll, uint32_t cnt, uint32_t max_cnt)
+query(sx_grid_t *g, uint32_t m, uint32_t *coll, uint32_t cnt, uint32_t max_cnt, uint32_t mask)
 {
   int beg = bisect(g, m);
   while(beg < g->element_cnt)
   {
-    coll[cnt++] = g->element[beg++] & 0xffffffffu; // keep entity index
-    if((g->element[beg]>>32) != m) break;          // not this cell any more
+    uint32_t eid = g->element[beg++] & 0xffffffffu;
+    if((1<<sx.world.entity[eid].camp) & mask)
+      coll[cnt++] = eid;                  // keep entity index
+    if((g->element[beg]>>32) != m) break; // not this cell any more
   }
   return dedup(coll, cnt);
 }
 
 uint32_t
-sx_grid_query(sx_grid_t *g, float *aabb, uint32_t *coll, uint32_t collider_max)
+sx_grid_query(sx_grid_t *g, float *aabb, uint32_t *coll, uint32_t collider_max, uint32_t mask)
 {
-  // TODO: compute aabb in integers
-  // TODO: compute morton codes, bisect list
+#if 1
+  int32_t ibb[4] = { // compute aabb in integers
+        (int32_t)(aabb[0]/64.0f), (int32_t)(aabb[2]/64.0f),
+        (int32_t)(aabb[3]/64.0f), (int32_t)(aabb[5]/64.0f)};
+  uint32_t m[20], cnt = 0;
+  int num_queries = 0;
+  for(int j=ibb[1];j<=ibb[3];j++) for(int i=ibb[0];i<=ibb[2];i++)
+  {
+    m[num_queries] = xy_to_morton(i, j);
+    if(num_queries++ > sizeof(m)/sizeof(m[0])) goto out;
+  }
+out:;
+  for(int i=0;i<num_queries;i++)
+    cnt = query(g, m[i], coll, cnt, collider_max, mask);
+  return cnt;
+#else
+  // compute morton codes, bisect list
   uint32_t cnt = 0;
   uint32_t m[4];
   for(int c=0;c<4;c++)
@@ -133,9 +153,10 @@ sx_grid_query(sx_grid_t *g, float *aabb, uint32_t *coll, uint32_t collider_max)
   int num_queries = dedup(m, 4);
   // fprintf(stderr, "querying morton %u %u %u %u num %d\n", m[0], m[1], m[2], m[3], num_queries);
   for(int i=0;i<num_queries;i++)
-    cnt = query(g, m[i], coll, cnt, collider_max);
+    cnt = query(g, m[i], coll, cnt, collider_max, mask);
   // fprintf(stderr, "colliding %u %u %u %u %u %u max %u\n", coll[0], coll[1], coll[2], coll[3], coll[4], coll[5], cnt);
   return cnt;
+#endif
 }
 
 void sx_grid_clear(sx_grid_t *g)

@@ -395,7 +395,6 @@ sx_move_helo_think(sx_entity_t *e)
     d[2] = sx.world.entity[sx.world.player_entity].body.c[2] - e->body.c[2];
     d[1] = 0.0f;
 #endif
-    // TODO: if anyone too close (from our group?) keep some distance!
 
     for(int k=0;k<3;k++)
       e->ctl.autopilot_vel_target[k] = d[k];
@@ -413,12 +412,15 @@ sx_move_helo_think(sx_entity_t *e)
   // TODO: factor these out into enemy behaviour header
   if(e-sx.world.entity != sx.world.player_entity)
   {
-    // collision avoidance:
-    int gid = e->id - 'A';
-    for(int m=0;m<sx.world.group[gid].num_members;m++)
-    {
-      sx_entity_t *o = sx.world.group[gid].member[m];
-      if(e == o) continue;
+    { // collision avoidance:
+      int gid = e->id - 'A';
+      sx_entity_t *o = 0;
+      for(int m=0;m<sx.world.group[gid].num_members;m++)
+      {
+        o = sx.world.group[gid].member[m];
+        if(e != o) continue;
+      }
+      if(e->id == 'W') o = sx.world.entity + sx.world.player_entity;
       float dist[3] = {
         o->body.c[0] - e->body.c[0],
         o->body.c[1] - e->body.c[1],
@@ -429,26 +431,49 @@ sx_move_helo_think(sx_entity_t *e)
         // aargh we need to flee!
         d[0] -= 100*dist[0];
         d[2] -= 100*dist[2];
+      }
+    }
+
+    if(e->engaged != -1u)
+    { // check whether still in range
+      float dist[3] = {
+        sx.world.entity[e->engaged].body.c[0] - e->body.c[0],
+        sx.world.entity[e->engaged].body.c[1] - e->body.c[1],
+        sx.world.entity[e->engaged].body.c[2] - e->body.c[2]};
+      if(sqrtf(dot(dist, dist)) > 700.0f) e->engaged = -1u;
+    }
+
+    if(e->engaged == -1u)
+    { // find entity to engage
+      uint32_t coll_ent[10];
+      int coll_cnt = 10;
+      int enemy_camp = e->camp == 2 ? 1 : 2;
+      float aabb[6] = {
+        e->body.c[0] - 600.0f, e->body.c[1] - 600.0f, e->body.c[2] - 600.0f,
+        e->body.c[0] + 600.0f, e->body.c[1] + 600.0f, e->body.c[2] + 600.0f};
+      coll_cnt = sx_grid_query(&sx.world.grid, aabb, coll_ent, coll_cnt, 1<<enemy_camp);
+      if(coll_cnt) e->engaged = coll_ent[0];
+      for(int k=0;k<coll_cnt;k++) if(coll_ent[k] == sx.world.player_entity)
+      { // prioritise player:
+        e->engaged = coll_ent[k];
         break;
       }
     }
 
-    // attack player
-    if(e->camp == 1) // TODO: if camp==2 search for camp==1 people
-    {
-      sx_entity_t *P = sx.world.entity + sx.world.player_entity;
+    if(e->engaged != -1u)
+    { // attack!
+      sx_entity_t *E = sx.world.entity + e->engaged;
       float dist[3] = {
-        P->body.c[0] - e->body.c[0],
-        P->body.c[1] - e->body.c[1],
-        P->body.c[2] - e->body.c[2]};
-      // within radar range? TODO: check if gear or bay out, detect later then!
+        E->body.c[0] - e->body.c[0],
+        E->body.c[1] - e->body.c[1],
+        E->body.c[2] - e->body.c[2]};
+      // within radar range? check if gear or bay out, detect later then!
       float factor = 1.0f;
-      factor += P->stat.gear * 0.5 + P->stat.bay * 0.5;
+      factor += E->stat.gear * 0.5 + E->stat.bay * 0.5;
       float len = sqrt(dot(dist,dist));
       if(len < 300.0f * factor)
       {
-        // fprintf(stderr, "\n[XXX] group %c attacking player!\n", e->id);
-        e->engaged = sx.world.player_entity;
+        // fprintf(stderr, "\n[XXX] group %c attacking group %c!\n", e->id, E->id);
         d[0] = dist[0];
         d[1] = 0.0f;
         d[2] = dist[2];

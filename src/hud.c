@@ -109,7 +109,7 @@ void sx_hud_init(sx_hud_t *hud)
       if(dot(x, x) > 0.2f*0.2f) continue; // out of range
       x[0] *= sx.height/(float)sx.width;
       str[0] = g + 'A';
-      if(sx.world.group[g].member[m]->hitpoints <= 0.0f) str[0] = 'X';
+      if(sx.world.group[g].member[m]->hitpoints <= 0.0f) str[0] = '.';
       textpos = sx_vid_hud_text(str, textpos, cx-x[0], cy+x[2], 1, 1);
     }
   }
