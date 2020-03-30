@@ -452,11 +452,11 @@ sx_move_helo_think(sx_entity_t *e)
         e->body.c[0] - 600.0f, e->body.c[1] - 600.0f, e->body.c[2] - 600.0f,
         e->body.c[0] + 600.0f, e->body.c[1] + 600.0f, e->body.c[2] + 600.0f};
       coll_cnt = sx_grid_query(&sx.world.grid, aabb, coll_ent, coll_cnt, 1<<enemy_camp);
-      if(coll_cnt) e->engaged = coll_ent[0];
+      for(int k=0;k<coll_cnt;k++)
+        if(sx.world.entity[coll_ent[k]].hitpoints > 0) { e->engaged = coll_ent[k]; break; }
       for(int k=0;k<coll_cnt;k++) if(coll_ent[k] == sx.world.player_entity)
       { // prioritise player:
-        e->engaged = coll_ent[k];
-        break;
+        if(sx.world.entity[coll_ent[k]].hitpoints > 0) { e->engaged = coll_ent[k]; break; }
       }
     }
 

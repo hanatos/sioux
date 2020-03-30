@@ -12,7 +12,9 @@ int
 c3_mission_begin(
     c3_mission_t *mis)
 {
-  // TODO: reload triggers!
+  mis->time = 0;
+  mis->counter = 0;
+  c3_triggers_reset(mis);
   sx.world.num_entities = 0;
   sx.world.num_static_entities = 0; // not yet running, allocate entities the simple way
   mis->gamestate = C3_GAMESTATE_PAD;
@@ -64,6 +66,9 @@ c3_mission_begin(
     // read orientation
     const float heading = 2.0f*M_PI*f[i].heading/(float)0xffff;
     quat_from_euler(&q, 0, 0, heading);
+    // XXX DEBUG
+      fprintf(stderr, "%c id filename %s\n", 'A' + c3_pos_groupid(f+i), sx.assets.object[objectid].filename);
+    // XXX DEBUG
     uint32_t eid = sx_world_add_entity(0, objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i));
     // found start position:
     if(!strcmp(sx.assets.object[objectid].filename, "startpos"))
@@ -129,7 +134,7 @@ c3_mission_pump_events(
     }
   }
 
-  if(sx.time > 1000.0)
+  if(mis->gamestate == C3_GAMESTATE_PAD)
     old_gamestate = mis->gamestate = C3_GAMESTATE_FLIGHT; // switching from pad -> flight can wait until finished
 
   c3_triggers_check(mis);

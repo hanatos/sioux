@@ -48,7 +48,7 @@ sx_sound_play(
     sx_sound_t *s,
     int channel)
 {
-  // fprintf(stderr, "[sound] playing %s\n", s->filename);
+  fprintf(stderr, "[sound] playing %s\n", s->filename);
   Mix_PlayChannel(channel, s->chunk, 0);
   return 0;
 }

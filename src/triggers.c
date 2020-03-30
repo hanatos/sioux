@@ -48,7 +48,7 @@ c3_triggers_int_to_pos(uint32_t id, float *pos)
       }
       return;
     }
-    // regular waypoing id, such as A1 or J3
+    // regular waypoint id, such as A1 or J3
     int wp = c0-'A', wpn = c1-'1';
     if(wp < 20 && wpn <= 10)
     {
@@ -166,7 +166,6 @@ c3_triggers_action(
       triggers_printf(stderr, "flashing control %u for %u seconds\n", arg0, arg1);
       break;        // flash, <id>, <times>  // tutorial: flash HUD element
     case C3_ACT_PLAY: // play <wav filename>
-      // TODO: maybe rules delete themselves once triggered? or only sounds?
       triggers_printf(stderr, "action play sound %u\n", arg0);
       if(arg0 < 0 || arg0 > sx.assets.num_sounds) return;
       sx_sound_play(sx.assets.sound+arg0, 0);
@@ -217,7 +216,7 @@ c3_triggers_check_cond(
         for(int k=0;k<3;k++)
           pos[k] -= P->body.c[k];
         // triggers_printf(stderr, "distance to waypoint %c%c : %g\n", arg1&0xff, arg1>>8, sqrtf(dot(pos,pos)/2.0f));
-        return sqrtf(dot(pos,pos)) < ft2m(2*arg0); // or maybe it was in yards?
+        return sqrtf(dot(pos,pos)) < 1.5*ft2m(arg0); // or maybe it was in yards?
       }
     case C3_COND_FARTHER:    // farther, <distance>, <object>
       {
@@ -226,7 +225,7 @@ c3_triggers_check_cond(
         for(int k=0;k<3;k++)
           pos[k] -= P->body.c[k];
         // triggers_printf(stderr, "distance to waypoint %c%c : %g\n", arg1&0xff, arg1>>8, sqrtf(dot(pos,pos)/2.0f));
-        return sqrtf(dot(pos,pos)) > ft2m(2*arg0);
+        return sqrtf(dot(pos,pos)) > 1.5*ft2m(arg0);
       }
     case C3_COND_INTACT:      // intact, <object>
       if(arg0 == 'P') return P->hitpoints > 0.0;
@@ -264,14 +263,15 @@ c3_triggers_check_cond(
       return mis->time >= arg0;
     case C3_COND_WAYPOINT:   // waypoint, <object>, <waypoint id>
       if(arg0 == 'P') return ((arg1&0xff)=='A') &&
-        ((arg1>>8)=='1' + P->curr_wp-1) &&
+        ((arg1>>8)==('1' + P->curr_wp-1)) &&
          (P->prev_wp != P->curr_wp);
       // TODO:
       // sx.world.group[arg0-'A'].members[m].curr_wp and curr_wpg ... but what happens if only one reaches the point?
       return 0;
     case C3_COND_DAMAGE:     // damage, <num>
       // TODO: return if hitpoints >= num
-      return 1;
+      if(P->hitpoints >= arg1) return 1;
+      return 0;
     case C3_COND_ENCOUNTER:
       if(arg0 == 'P' && P->engaged != -1u) return sx.world.entity[P->engaged].id == arg1;
       return 0;
@@ -348,4 +348,10 @@ c3_triggers_check(
   // triggers_printf(stderr, "ran %d/%d triggers\n", enabled, mis->num_triggers);
 }
 
+
+void c3_triggers_reset(c3_mission_t *mis)
+{
+  for(int t=0;t<mis->num_triggers;t++)
+    mis->trigger[t].enabled = 1;
+}
 

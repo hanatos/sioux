@@ -163,4 +163,5 @@ void c3_triggers_check_one(c3_mission_t *mis, c3_trigger_t *t);
 
 void c3_triggers_check(c3_mission_t *mis);
 
-char* c3_triggers_parse_music(char* filename, char letter, int gamestate, char fg);
+void c3_triggers_reset(c3_mission_t *mis);
+
