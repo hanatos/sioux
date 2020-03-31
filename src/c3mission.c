@@ -114,6 +114,19 @@ c3_mission_pump_events(
 {
   static int old_gamestate = C3_GAMESTATE_PAD;
 
+  if(sx.mission.gamestate == C3_GAMESTATE_FLIGHT)
+  {
+    if(sx.world.entity[sx.world.player_entity].engaged != -1u &&
+       sx.world.entity[sx.world.entity[sx.world.player_entity].engaged].hitpoints > 0)
+      sx.mission.gamestate = C3_GAMESTATE_COMBAT;
+  }
+  else if(sx.mission.gamestate == C3_GAMESTATE_COMBAT)
+  {
+    if(sx.world.entity[sx.world.player_entity].engaged == -1u ||
+       sx.world.entity[sx.world.entity[sx.world.player_entity].engaged].hitpoints <= 0)
+      sx.mission.gamestate = C3_GAMESTATE_FLIGHT;
+  }
+
   if(!Mix_PlayingMusic())
     sx_music_play(sx.assets.fmusic[sx.mission.gamestate], 100);
 

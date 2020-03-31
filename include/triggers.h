@@ -65,6 +65,7 @@ typedef enum c3_condition_t
   C3_COND_ATTACKED,   // attacked, <object>
   C3_COND_FACES,      // faces, <object/waypoint id>  // maybe looking at it?
   C3_COND_WEAPON,     // weapon, <num> // have this weapon selected
+  C3_COND_HELLFIRE,   // hellfire, <num> ??? see c1m2.mis
   C3_COND_CNT,
 }
 c3_condition_t;
@@ -88,6 +89,7 @@ static const char *c3_condition_text[] =
   "attacked",
   "faces",
   "weapon",
+  "hellfire",
   "---",
 };
 
@@ -119,6 +121,7 @@ typedef enum c3_action_t
   C3_ACT_WIN,          // mission won
   C3_ACT_CLEARCOUNTER, // restart from 0?
   C3_ACT_ROUTE,        // send group to waypoint
+  C3_ACT_SETAI,        // send an integer to the NPC: setai, <groupid>, <int>
   C3_ACT_CNT,
 }
 c3_action_t;
@@ -134,6 +137,7 @@ static const char *c3_action_text[] =
   "win",
   "clearcounter",
   "route",
+  "setai",
   "---",
 };
 

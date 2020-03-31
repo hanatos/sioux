@@ -4,15 +4,18 @@
 typedef enum sx_hud_element_t
 {
   s_hud_none = 0,
+  s_hud_waypoint = 4,       // name and distance to the next waypoint
+  s_hud_weapons = 5,        // weapon priority indicator
+  s_hud_alt_above_sea = 7,  // above sea level? (unused by us)
+  s_hud_altitude = 8,       // altimeter above ground level
+  s_hud_radar = 9,
   s_hud_torque = 11,
-  s_hud_groundvel = 13, // ? or 7
-  // 14 rate of climb indicator
-  s_hud_altitude = 8, // altimeter above ground level
+  s_hud_velocity_vec = 12,  // velocity vector (unused by us)
+  s_hud_groundvel = 13,     // speed in knows ? or 7
+  s_hud_rate_of_climb = 14, // rate of climb indicator
   s_hud_compass,
-  s_hud_waypoint,
   s_hud_time,
   s_hud_center,
-  s_hud_radar,
 }
 sx_hud_element_t;
 

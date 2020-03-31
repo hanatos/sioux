@@ -172,24 +172,17 @@ void sx_hud_init(sx_hud_t *hud)
   }
   HUD_END(s_hud_groundvel)
 
-  // altitude above ground
-  HUD_BEG(s_hud_altitude)
+  {
   const float aog = entity->stat.alt_above_ground;
   const float cx = -.54f, cy = -.3f;
+  float ht = 0.001f * aog;
+  HUD_BEG(s_hud_altitude)
+  // altitude above ground
   i += line(cx, cy, cx, cy+0.6f, hud->lines+2*i);
 
-  // compute relative vertical speed in world space
-  const float vas = vws[1];
-
   // first put everything to altitude above ground
-  float ht = 0.001f * aog;
   i += line(cx+0.01f, cy+ht, cx-0.02f, cy+ht+0.001f, hud->lines+2*i);
   i += line(cx+0.01f, cy+ht, cx-0.02f, cy+ht-0.001f, hud->lines+2*i);
-
-  // now move relative vertical air speed up or down
-  ht += 0.010f * vas;
-  i += line(cx+0.01f, cy+ht, cx-0.02f, cy+ht+0.01f, hud->lines+2*i);
-  i += line(cx+0.01f, cy+ht, cx-0.02f, cy+ht-0.01f, hud->lines+2*i);
   snprintf(timestr, sizeof(timestr), "ALT %3d", (int)(aog));
   textpos = sx_vid_hud_text(timestr, textpos, cx, cy+0.63f, 1, 0);
   if(entity->ctl.autopilot_alt)
@@ -201,6 +194,17 @@ void sx_hud_init(sx_hud_t *hud)
     i += line(cx-3*d, cy+tgt+d, cx-3*d, cy+tgt-d, hud->lines+2*i);
   }
   HUD_END(s_hud_altitude)
+
+  HUD_BEG(s_hud_rate_of_climb)
+  // compute relative vertical speed in world space
+  const float vas = vws[1];
+
+  // now move relative vertical air speed up or down
+  ht += 0.010f * vas;
+  i += line(cx+0.01f, cy+ht, cx-0.02f, cy+ht+0.01f, hud->lines+2*i);
+  i += line(cx+0.01f, cy+ht, cx-0.02f, cy+ht-0.01f, hud->lines+2*i);
+  HUD_END(s_hud_rate_of_climb)
+  }
 
   HUD_BEG(s_hud_compass)
   float head[3] = {0.0f, 0.0f, 1.0f}; // world space heading
