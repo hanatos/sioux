@@ -3,6 +3,7 @@
 // auto-generate all headers:
 #define MOVE_LIST \
 MOVE_DO(rock)\
+MOVE_DO(hell)\
 MOVE_DO(toss)\
 MOVE_DO(helo)\
 MOVE_DO(boom)

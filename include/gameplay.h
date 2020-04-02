@@ -32,6 +32,15 @@ sx_spawn_explosion(
 }
 
 static inline uint32_t
+sx_spawn_hellfire(
+    sx_entity_t *parent)
+{
+  // play rocket sound, fade with distance to camera
+  // TODO: sx_sound_play();
+  return sx_spawn_child(sx.mission.obj_hellfire, parent);
+}
+
+static inline uint32_t
 sx_spawn_rocket(
     sx_entity_t *parent)
 {

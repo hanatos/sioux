@@ -1145,19 +1145,18 @@ void sx_vid_render_frame_rect()
       glDrawArrays(GL_LINES, 0, sx.vid.debug_line_cnt/3);
     }
 #endif
-#if 0
+#if 1
     // draw debug force lines
     if(sx.vid.program_debug_line != -1 && sx.vid.debug_line_cnt)
     {
       uint32_t program = sx.vid.program_debug_line;
       glUseProgram(program);
 
-      const sx_entity_t *ent = sx.world.entity + sx.world.player_entity;
-      // we have lines almost directly in world space (offset missing, rotation is there)
-      float MVP[16], MV[16];
+      // we have lines directly in world space
+      float MVP[16], MV[16], pos[3] = {0,0,0};
       quat_t mq;
       quat_init_angle(&mq, 0, 1, 0, 0);
-      sx_vid_compute_mvp(MVP, MV, -1, &mq, ent->body.c, &sx.cam, 0, 0);
+      sx_vid_compute_mvp(MVP, MV, -1, &mq, pos, &sx.cam, 0, 0);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mvp"), 1, GL_TRUE, MVP);
       glUniformMatrix4fv(glGetUniformLocation(program, "u_mv"),  1, GL_TRUE, MV);
 

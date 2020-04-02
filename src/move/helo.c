@@ -337,7 +337,7 @@ sx_move_helo_think(sx_entity_t *e)
     { // bay is open!
       if(sx.time - e->fire_time >= 300.0f)
       { // also weapons are ready
-        uint32_t eid = sx_spawn_rocket(e);
+        uint32_t eid = sx_spawn_hellfire(e);//sx_spawn_rocket(e);
         uint32_t oid = e->objectid;
         e->fire_time = sx.time;
         if(oid != -1u)

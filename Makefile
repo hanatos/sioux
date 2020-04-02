@@ -62,6 +62,7 @@ SX_FILES=src/sx.c\
          src/move/helo.c\
          src/move/boom.c\
          src/move/rock.c\
+         src/move/hell.c\
          src/plot/1prt.c\
          src/plot/coma.c\
          src/plot/helo.c\

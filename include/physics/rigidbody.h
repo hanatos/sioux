@@ -59,8 +59,8 @@ static inline void sx_rigid_body_apply_force(
 
 #if 1
   float v0[3], v1[3];
-  for(int k=0;k<3;k++) v0[k] = act->r[k];
-  for(int k=0;k<3;k++) v1[k] = act->r[k] + act->f[k];
+  for(int k=0;k<3;k++) v0[k] = b->c[k] + act->r[k];
+  for(int k=0;k<3;k++) v1[k] = b->c[k] + act->r[k] + act->f[k];
   sx_vid_add_debug_line(v0, v1);
 #endif
 
