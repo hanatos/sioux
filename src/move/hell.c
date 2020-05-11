@@ -39,7 +39,7 @@ sx_move_hell_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
 
   if(sx.time - r->fire_time < 2100.0f)
   { // thrust of rocket booster
-    float c = 981.0f; // 100 g thrust
+    float c = 9810.0f;
     float period = sx.time - r->fire_time;
     if(period < 400.0f)
     { // forward!
@@ -126,10 +126,9 @@ sx_move_hell_init(sx_entity_t *e)
   r->fire_time = sx.time;
   for(int k=0;k<3;k++) r->last_p[k] = -1.0;
   e->move_data = r;
-  // TODO: insert hellfire numbers
-  // these are hydra 70, come out at 6.2 kg, 700m/s, 8000-10000m range.
-  float w = 0.07f, h = 0.07f, l = 1.060f;
-  float rho = 1193.7f;
+  // apparently these can do Mach 1.3, have 50kg, 1.6m long and 0.18m diameter
+  float w = 0.18f, h = 0.18f, l = 1.63f;
+  float rho = 1000.0; // around same density as regular rockets
   const float mass = rho * w * h * l;
   e->body.m = mass;
   e->body.invI[0] = 3.0f/8.0f / (rho * w * (h * l*l*l + l * h*h*h));
