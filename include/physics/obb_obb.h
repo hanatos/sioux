@@ -37,7 +37,7 @@ static inline void sx_obb_get(
   obb[0].hsize[0] = tmp.hsize[0];
   obb[0].hsize[1] = tmp.hsize[1];
   obb[0].hsize[2] = tmp.hsize[2];
-  if(o != -1)
+  if(o != -1u)
     for(int k=0;k<3;k++)
       obb[0].pos[k] += sx.assets.object[oi].geo_off[0][3*o+k];
   for(int k=0;k<3;k++)
