@@ -1,6 +1,6 @@
 #version 440
 #extension GL_ARB_bindless_texture : require
-#extension GL_NV_gpu_shader5 : enable
+// #extension GL_ARB_gpu_shader_int64 :enable
 
 #define M_PI 3.1415926535897932384626433832795
 in vec3 shading_normal;
@@ -18,7 +18,8 @@ layout(binding = 0) uniform sampler2D render;
 
 struct material_t
 {
-  uint64_t tex_handle;
+  // uint64_t tex_handle;
+  uvec2 tex_handle;
   uint dunno0;
   uint dunno1;
   uint dunno2;
@@ -217,8 +218,9 @@ void main()
 
   uint anim = (mat[matb].dunno3>>8) & 0xff;
   if(anim > 0) matb = matb + ((b_anim[id.y]) % anim);
-  uint64_t th = mat[matb].tex_handle;
-  if(th != -1)
+  // uint64_t th = mat[matb].tex_handle;
+  uvec2 th = mat[matb].tex_handle;
+  if(th.x != -1)
     diffcol = texture(sampler2D(th), tex_uv.xy);
   else
   { // no texture
