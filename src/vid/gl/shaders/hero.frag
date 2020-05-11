@@ -216,7 +216,7 @@ void main()
 
   // const vec3 ref = reflect(wi, n);
 
-  uint anim = (mat[matb].dunno3>>8) & 0xff;
+  uint anim = (mat[matb].dunno3>>8) & 0xffu;
   if(anim > 0) matb = matb + ((b_anim[id.y]) % anim);
   // uint64_t th = mat[matb].tex_handle;
   uvec2 th = mat[matb].tex_handle;
@@ -224,7 +224,7 @@ void main()
     diffcol = texture(sampler2D(th), tex_uv.xy);
   else
   { // no texture
-    uint trans = (mat[matb].dunno2>>24) & 0xff;
+    uint trans = (mat[matb].dunno2>>24) & 0xffu;
     if(trans > 0)
     { // window glass
       diffcol = vec4(0.9, 0.4, 0.1, 0.2);
