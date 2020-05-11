@@ -27,7 +27,7 @@ struct material_t
 };
 layout(std430,binding=1) buffer geo_material
 {
-  material_t mat[];
+  material_t matrl[];
 };
 layout(std430,binding=2) buffer geo_anim
 {
@@ -211,29 +211,29 @@ void main()
   col += fr * L_sun;
   col += vec3(pow((n.y+1)/2.0, 2));
   // col = vec3(pow(abs(dot(-wi, n)), 2));
-  if((mat[matb].dunno0>>24) > 0) // explosions etc with static light
+  if((matrl[matb].dunno0>>24) > 0) // explosions etc with static light
     col = vec3(1);
 
   // const vec3 ref = reflect(wi, n);
 
-  uint anim = (mat[matb].dunno3>>8) & 0xffu;
+  uint anim = (matrl[matb].dunno3>>8) & 0xffu;
   if(anim > 0) matb = matb + ((b_anim[id.y]) % anim);
-  // uint64_t th = mat[matb].tex_handle;
-  uvec2 th = mat[matb].tex_handle;
+  // uint64_t th = matrl[matb].tex_handle;
+  uvec2 th = matrl[matb].tex_handle;
   if(th.x != -1)
     diffcol = texture(sampler2D(th), tex_uv.xy);
   else
   { // no texture
-    uint trans = (mat[matb].dunno2>>24) & 0xffu;
+    uint trans = (matrl[matb].dunno2>>24) & 0xffu;
     if(trans > 0)
     { // window glass
       diffcol = vec4(0.9, 0.4, 0.1, 0.2);
       if(dot(-wi, n) < 0) discard; // hide backfacing
     }
     // radar nose colour:
-    else diffcol.rgb = unpackUnorm4x8(mat[matb].dunno1).rgb;
+    else diffcol.rgb = unpackUnorm4x8(matrl[matb].dunno1).rgb;
   }
-  // if((mat[matb].dunno0>>24) > 0)
+  // if((matrl[matb].dunno0>>24) > 0)
   {
     // fake indirect diffuse
     const vec3 L_sky = vec3(0.5);// XXX  * diffenv(ref, 8).rgb;
