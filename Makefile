@@ -15,6 +15,7 @@ SDL_C+=$(shell pkg-config --cflags SDL2_mixer)
 all: pcx model anim sx png2bc3
 
 sanitize: CFLAGS+=-fno-omit-frame-pointer -fsanitize=address
+sanitize: LDFLAGS+=-fsanitize=address
 sanitize: all
 
 debug: CFLAGS+=-ggdb3 -O0

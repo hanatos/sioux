@@ -135,7 +135,7 @@ sx_grid_query(sx_grid_t *g, float *aabb, uint32_t *coll, uint32_t collider_max, 
   for(int j=ibb[1];j<=ibb[3];j++) for(int i=ibb[0];i<=ibb[2];i++)
   {
     m[num_queries] = xy_to_morton(i, j);
-    if(num_queries++ > sizeof(m)/sizeof(m[0])) goto out;
+    if(++num_queries >= sizeof(m)/sizeof(m[0])) goto out;
   }
 out:;
   for(int i=0;i<num_queries;i++)
