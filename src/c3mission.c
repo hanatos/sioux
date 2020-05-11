@@ -66,9 +66,7 @@ c3_mission_begin(
     // read orientation
     const float heading = 2.0f*M_PI*f[i].heading/(float)0xffff;
     quat_from_euler(&q, 0, 0, heading);
-    // XXX DEBUG
-      fprintf(stderr, "%c id filename %s\n", 'A' + c3_pos_groupid(f+i), sx.assets.object[objectid].filename);
-    // XXX DEBUG
+    // fprintf(stderr, "%c id filename %s\n", 'A' + c3_pos_groupid(f+i), sx.assets.object[objectid].filename);
     uint32_t eid = sx_world_add_entity(0, objectid, pos, &q, 'A'+c3_pos_groupid(f+i), c3_pos_campid(f+i));
     // found start position:
     if(!strcmp(sx.assets.object[objectid].filename, "startpos"))

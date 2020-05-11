@@ -1145,7 +1145,7 @@ void sx_vid_render_frame_rect()
       glDrawArrays(GL_LINES, 0, sx.vid.debug_line_cnt/3);
     }
 #endif
-#if 1
+#if 0
     // draw debug force lines
     if(sx.vid.program_debug_line != -1 && sx.vid.debug_line_cnt)
     {
