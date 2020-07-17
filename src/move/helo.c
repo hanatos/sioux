@@ -235,14 +235,15 @@ sx_move_helo_damage(
 
     // TODO: this sucks and needs replacement. do velocity and if rotor touched etc.
     // TODO: at the very least see whether we hit ground upside down
-    float impulse = sqrtf(dot(e->body.pv, e->body.pv));
+    const float mul = sx.world.entity + sx.world.player_entity == e ? 1.0 : 0.001; // NPC are stupid and fly into mountains all the time
+    float impulse = mul * sqrtf(dot(e->body.pv, e->body.pv));
     // if(dt < 0.5 && impulse > 15000.0) // impulse in meters/second * kg
     {
       // TODO: more selective damage
       // if(dt > 0.5 && e->stat.gear == 1)// can't do that with current AI.
       if(e->stat.gear == 1)
       {
-        if(impulse > 100000.0)
+        if(impulse > 20000.0)
         {
           sx_sound_play(sx.assets.sound + sx.mission.snd_hit, -1);
           new_hitpoints -= 20; // TODO: damage gear
@@ -252,7 +253,7 @@ sx_move_helo_damage(
       {
         sx_sound_play(sx.assets.sound + sx.mission.snd_scrape, -1);
         new_hitpoints -= 5;
-        if(dt < 0.2 || impulse > 50000.0)
+        if(dt < 0.2 || impulse > 5000.0)
           new_hitpoints -= 100;
       }
     }
