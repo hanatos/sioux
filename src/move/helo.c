@@ -100,8 +100,8 @@ sx_move_helo_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
   a.r[0] = h->mnr[0];
   a.r[1] = h->mnr[1];
   a.r[2] = h->mnr[2];
-  a.f[0] = -.3f*e->ctl.cyclic[0]; // du: to the sides
-  a.f[2] =  .3f*e->ctl.cyclic[1]; // dv: front or back
+  a.f[0] = -.4f*e->ctl.cyclic[0]; // du: to the sides
+  a.f[2] =  .4f*e->ctl.cyclic[1]; // dv: front or back
   a.f[1] = 1.0f;
   normalise(a.f);
   const float mr = 400.0f*h->main_rotor_weight / (b->m - h->main_rotor_weight);
@@ -135,7 +135,7 @@ sx_move_helo_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
   a.r[0] = h->tlr[0];
   a.r[1] = h->tlr[1];
   a.r[2] = h->tlr[2];
-  a.f[0] = 0.30f * b->m * e->ctl.tail; // tail thrust
+  a.f[0] = 0.60f * b->m * e->ctl.tail; // tail thrust
   // want to counteract main rotor torque, i.e. r x f == - main rotor torque
   a.f[0] -= main_rotor_torque1_os/a.r[2];
   quat_transform(&b->q, a.r); // to world space
@@ -158,7 +158,7 @@ sx_move_helo_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
   if(vel2 > 0.0f)
   {
     float wind_os[3] = {wind[0], wind[1], wind[2]};
-    float scale = 2.0f;           // arbitrary effect strength scale parameter
+    float scale = 0.9f;           // arbitrary effect strength scale parameter
     scale += e->stat.gear * 0.8f; // gear out, more drag
     scale += e->stat.bay  * 0.7f; // bay open, more drag
     quat_transform_inv(&b->q, wind_os); // to object space
@@ -172,9 +172,9 @@ sx_move_helo_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
   // dampen velocity
   // m/s -> nautical miles / h
   // XXX TODO: this needs to be limited by air flow against rotor blades i think
-  if(ms2knots(sqrtf(dot(b->v, b->v))) < 170)
-    b->drag = 0.0f;
-  else b->drag = 0.95f;
+  // if(ms2knots(sqrtf(dot(b->v, b->v))) < 170)
+  //   b->drag = 0.0f;
+  // else b->drag = 0.95f;
   // b->angular_drag = 0.05f;
 
   // TODO: force depends on speed of air relative to pressure point (in the absence
@@ -336,9 +336,13 @@ sx_move_helo_think(sx_entity_t *e)
   { // fire trigger pulled
     if(e->stat.bay >= 1.0f)
     { // bay is open!
-      if(sx.time - e->fire_time >= 300.0f)
+      int player = sx.world.entity + sx.world.player_entity == e;
+      float delay = player ? 250.0f : 1500.0f;
+      if(sx.time - e->fire_time >= delay)
       { // also weapons are ready
-        uint32_t eid = sx_spawn_hellfire(e);//sx_spawn_rocket(e);
+        uint32_t eid = player ?
+          sx_spawn_rocket(e):       // some leveling, we don't need auto aim,
+          sx_spawn_hellfire(e);     // they do..
         uint32_t oid = e->objectid;
         e->fire_time = sx.time;
         if(oid != -1u)
