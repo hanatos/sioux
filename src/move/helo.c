@@ -158,7 +158,7 @@ sx_move_helo_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
   if(vel2 > 0.0f)
   {
     float wind_os[3] = {wind[0], wind[1], wind[2]};
-    float scale = 0.9f;           // arbitrary effect strength scale parameter
+    float scale = 0.84f;          // arbitrary effect strength scale parameter
     scale += e->stat.gear * 0.8f; // gear out, more drag
     scale += e->stat.bay  * 0.7f; // bay open, more drag
     quat_transform_inv(&b->q, wind_os); // to object space
@@ -454,14 +454,33 @@ sx_move_helo_think(sx_entity_t *e)
       int coll_cnt = 10;
       int enemy_camp = e->camp == 2 ? 1 : 2;
       float aabb[6] = {
-        e->body.c[0] - 600.0f, e->body.c[1] - 600.0f, e->body.c[2] - 600.0f,
-        e->body.c[0] + 600.0f, e->body.c[1] + 600.0f, e->body.c[2] + 600.0f};
+        e->body.c[0] - 700.0f, e->body.c[1] - 700.0f, e->body.c[2] - 700.0f,
+        e->body.c[0] + 700.0f, e->body.c[1] + 700.0f, e->body.c[2] + 700.0f};
       coll_cnt = sx_grid_query(&sx.world.grid, aabb, coll_ent, coll_cnt, 1<<enemy_camp);
       for(int k=0;k<coll_cnt;k++)
-        if(sx.world.entity[coll_ent[k]].hitpoints > 0) { e->engaged = coll_ent[k]; break; }
+        if(sx.world.entity[coll_ent[k]].hitpoints > 0 && 
+            coll_ent[k] != sx.world.player_entity)
+        { e->engaged = coll_ent[k]; break; }
       for(int k=0;k<coll_cnt;k++) if(coll_ent[k] == sx.world.player_entity)
       { // prioritise player:
-        if(sx.world.entity[coll_ent[k]].hitpoints > 0) { e->engaged = coll_ent[k]; break; }
+        sx_entity_t *E = sx.world.entity + coll_ent[k];
+        if(E->hitpoints > 0)
+        {
+          // cannot see if too low 
+          float dist[3] = {
+            E->body.c[0] - e->body.c[0],
+            E->body.c[1] - e->body.c[1],
+            E->body.c[2] - e->body.c[2]};
+          float d = sqrtf(dot(dist, dist));
+          float factor = E->stat.alt_above_ground / 45.0f;
+          factor *= 0.8 + E->stat.gear * 0.1 + E->stat.bay * 0.1;
+          // fprintf(stderr, "\n*** distance %g < %g, factor %g alt %g\n\n", d, factor*700.0f, factor, E->stat.alt_above_ground);
+          if(d < MAX(300.0f, factor * 700.0f))
+          {
+            e->engaged = coll_ent[k];
+            break;
+          }
+        }
       }
     }
 

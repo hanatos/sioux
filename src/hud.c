@@ -111,6 +111,17 @@ void sx_hud_init(sx_hud_t *hud)
       str[0] = g + 'A';
       if(sx.world.group[g].member[m]->hitpoints <= 0.0f) str[0] = '.';
       textpos = sx_vid_hud_text(str, textpos, cx-x[0], cy+x[2], 1, 1);
+
+      if(sx.world.group[g].member[m]->engaged == sx.world.player_entity &&
+         sx.world.group[g].member[m]->hitpoints > 0)
+        i += line(cx, cy, cx-x[0], cy+x[2], hud->lines+2*i);
+      if(sx.world.group[g].member[m] - sx.world.entity == entity->engaged)
+      {
+        i += line(cx-x[0]-0.007, cy+x[2]-0.01, cx-x[0]+0.007, cy+x[2]-0.01, hud->lines+2*i);
+        i += line(cx-x[0]+0.007, cy+x[2]-0.01, cx-x[0]+0.007, cy+x[2]+0.01, hud->lines+2*i);
+        i += line(cx-x[0]+0.007, cy+x[2]+0.01, cx-x[0]-0.007, cy+x[2]+0.01, hud->lines+2*i);
+        i += line(cx-x[0]-0.007, cy+x[2]+0.01, cx-x[0]-0.007, cy+x[2]-0.01, hud->lines+2*i);
+      }
     }
   }
   if(entity->engaged != -1u)

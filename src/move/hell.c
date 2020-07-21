@@ -18,9 +18,8 @@ void
 sx_move_hell_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
 {
   sx_move_hell_t *r = e->move_data;
-  const int m = 6.2f;
   sx_actuator_t grav = { // gravity
-    .f = {0.0f, -9.81f * m, 0.0f},
+    .f = {0.0f, -9.81f * b->m, 0.0f},
     .r = {0.0f, 0.0f, 0.0f},
   };
   sx_rigid_body_apply_force(b, &grav);
@@ -41,7 +40,15 @@ sx_move_hell_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
   { // thrust of rocket booster
     float c = 9810.0f;
     float period = sx.time - r->fire_time;
-    if(period < 400.0f)
+    if(period >= 400.0f && period < 700.0f)
+    { // go up
+      sx_actuator_t thrust = {
+        .f = {0.0f, c, 0.0f},
+        .r = {0.0f, 0.0f, 0.0f},
+      };
+      sx_rigid_body_apply_force(b, &thrust);
+    }
+    else
     { // forward!
       sx_actuator_t thrust = {
         .f = {0.0f, 0.0f, c},
@@ -50,22 +57,14 @@ sx_move_hell_update_forces(sx_entity_t *e, sx_rigid_body_t *b)
       quat_transform(&b->q, thrust.f);
       sx_rigid_body_apply_force(b, &thrust);
     }
-    else if(period < 700.0f)
-    { // go up
-      sx_actuator_t thrust = {
-        .f = {0.0f, c, 0.0f},
-        .r = {0.0f, 0.0f, 0.0f},
-      };
-      sx_rigid_body_apply_force(b, &thrust);
-    }
-    else if(e->parent && e->parent->engaged != -1u)
+    if(period >= 700.0f && e->parent && e->parent->engaged != -1u)
     {
       float d[] = {
         // dt for sim is 16.6ms, try to estimate how much speed we need to remove to aim exactly at the target
         // TODO: maybe use the velocity/direction wings above instead for the steering
-        sx.world.entity[e->parent->engaged].body.c[0] - e->body.c[0] - 0.6*b->v[0],
-        sx.world.entity[e->parent->engaged].body.c[1] - e->body.c[1] - 0.6*b->v[1],
-        sx.world.entity[e->parent->engaged].body.c[2] - e->body.c[2] - 0.6*b->v[2]};
+        sx.world.entity[e->parent->engaged].body.c[0] - e->body.c[0] - 1.8*b->v[0],
+        sx.world.entity[e->parent->engaged].body.c[1] - e->body.c[1] - 1.8*b->v[1],
+        sx.world.entity[e->parent->engaged].body.c[2] - e->body.c[2] - 1.8*b->v[2]};
       normalise(d);
       sx_actuator_t steer = {
         .f = {c*d[0], c*d[1], c*d[2]},
