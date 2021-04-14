@@ -243,20 +243,21 @@ c3_mission_load(
   if(file_readline(f, line)) return 1;
   sscanf(line, "%d", &mis->copilot);
   if(file_readline(f, line)) return 1;
+  if(line[0] == '<') goto load_obj;
   sscanf(line, "%d", &mis->ideal_altitude);
   if(file_readline(f, line)) return 1;
+  if(line[0] == '<') goto load_obj;
   sscanf(line, "%d", &mis->magic_pal_number);
   if(file_readline(f, line)) return 1;
+  if(line[0] == '<') goto load_obj;
   sscanf(line, "%d", &mis->weight);
 
-
-  if(file_readline(f, line)) return 1;
-  sscanf(line, "%*d"); // future use 0
-  if(file_readline(f, line)) return 1;
-  sscanf(line, "%*d"); // future use 1
-
-  if(file_readline(f, line)) return 1;
-  if(line[0] != '<') fprintf(stderr, "expected '<'!\n");
+  do
+  { // now read stuff until <
+    if(file_readline(f, line)) return 1;
+  }
+  while(line[0] != '<');
+load_obj:
 
   // ai file section:
   // one ai file per line (without .ai suffix, needs tolower())
